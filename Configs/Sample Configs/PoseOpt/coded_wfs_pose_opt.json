@@ -1,0 +1,102 @@
+{
+	"Info": {
+		"creator": "Jannis.Maron@uni-siegen.de",
+		"created": "08-September-2025",
+		"description": "Sample Config for Pose Optimization",
+		
+		"08-September-2025": "Created"
+	},
+	
+	
+	"PoseOpt": {
+		
+		"loss_fn": "mse_ncc_loss",
+		"weights": [200, 35, 0.25, 100],
+		
+		
+		"gt_transforms": {
+			"field": {},
+			"amp": {
+				"sqrt": {}
+			},
+			"phase": {
+				"gaussian_blur": {"sigma": 5.0},
+				"subtract_mean": {}
+				}
+		},
+		
+		"sim_transforms": {
+			"field": {
+				"crop": {"x_min":125, "y_min":125, "x_max":-125, "y_max":-125}
+			},
+			"amp": {},
+			"phase": {
+				"subtract_mean": {}
+			}
+		},
+		
+		
+		"start_frame": 0,
+		"end_frame": 2,
+		"frame_steps": 1,
+		
+		
+		"unit": "um",
+		"Position": [26.875, 26.875, 21],
+		"Axis": [1, 0, 0],
+		"Angle": -21.8,
+		
+		
+		
+		"Initial":{
+			
+			"epochs": 10,
+
+			"optimizer": {
+				"params":{
+					"Position": {"active": true, "lr": 1e-1},
+					"Axis": {"active": true, "lr": 5e-2},
+					"Angle": {"active": true, "lr": 1e-1}
+				},
+				"scheduler": {
+					"MultiStepLR": {
+						"milestones": [150,175, 190],
+						"gamma": 0.5
+					}
+				}
+			},
+			
+			"regularizers" : {}
+			
+		},
+		
+		
+		"Sequential": {
+
+			"epochs": 10,
+
+			"optimizer": {
+				"params":{
+					"Position": {"active": true, "lr": 5e-2},
+					"Axis": {"active": true, "lr": 1e-2},
+					"Angle": {"active": true, "lr": 5e-1}
+				},
+				"scheduler": {
+					"MultiStepLR": {
+						"milestones": [15, 18],
+						"gamma": 0.5
+					}
+				}
+			},
+			
+			"regularizers" : {
+				"Position": {"var": "Position", "lambda": 0.5},
+				"Axis": {"var": "Axis", "lambda": 5, "w": [1e-5,1e-3,1e-3], "v": [1e-5,1e-3,1e-3]},
+				"Angle": {"var": "Angle", "lambda": 0.0075}
+			}
+			
+		}
+	
+		
+	}
+}

@@ -1,0 +1,44 @@
+{
+	"Info": {
+		"creator": "Jannis.Maron@uni-siegen.de",
+		"created": "15-October-2025",
+		"description": "Overwrite Config for combining PoseOpt and ReconOpt for Raw Coded WFS Data",
+		
+		"30-September-2025": "Created"
+	},
+	
+	"n_iter": 2,
+	
+	"PoseOpt": {
+	
+		"Iter 2":{
+			"gt_transforms": {
+				"field": {},
+				"amp": {
+					"sqrt": {}
+				},
+				"phase": {
+					"subtract_mean": {}
+					}
+			},
+			
+			"sim_transforms": {
+				"field": {
+					"crop": {"x_min":125, "y_min":125, "x_max":-125, "y_max":-125}
+				},
+				"amp": {},
+				"phase": {
+					"subtract_mean": {}
+				}
+			}
+		}
+			
+	},
+	
+	
+	"ReconOpt":{
+		
+		
+	}
+	
+}

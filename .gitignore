@@ -1,0 +1,13 @@
+main/__pycache__/
+main/wandb/
+Core/__pycache__/
+Components/__pycache__/
+Components/wandb/
+Configs/Experiment Configs/
+Data/
+Utils/_TEMP/
+Utils/TBD/
+Utils/Misc
+Outputs/
+.vscode/
+
