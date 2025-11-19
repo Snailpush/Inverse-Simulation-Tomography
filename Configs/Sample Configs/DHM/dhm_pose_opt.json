@@ -52,19 +52,16 @@
 		"Initial":{
 			
 			"epochs": 21,
-
-			"optimizer": {
-				"params":{
-					"Position": {"active": true, "lr": 5e-1},
-					"Axis": {"active": true, "lr": 1e-0},
-					"Angle": {"active": true, "lr": 1e-0}
-				},
-				"scheduler": {
-					"MultiStepLR": {
-						"milestones": [150,175, 190],
-						"gamma": 0.5
-					}
-				}
+			
+			"optimizer":{
+				"Position": {"lr": 5e-1},
+				"Axis": {"lr": 1e-0},
+				"Angle": {"lr": 1e-0}
+			},
+			
+			"scheduler":{
+				"milestones": [150,175, 190],
+				"gamma": 0.5
 			},
 			
 			"regularizers" : {
@@ -77,18 +74,15 @@
 
 			"epochs": 21,
 
-			"optimizer": {
-				"params":{
-					"Position": {"active": true, "lr": 1e-1},
-					"Axis": {"active": true, "lr": 1e-1},
-					"Angle": {"active": true, "lr": 5e-1}
-				},
-				"scheduler": {
-					"MultiStepLR": {
-						"milestones": [5, 10, 15],
-						"gamma": 0.5
-					}
-				}
+			"optimizer":{
+				"Position": {"lr": 1e-1},
+				"Axis": {"lr": 1e-1},
+				"Angle": {"lr": 5e-1}
+			},
+			
+			"scheduler":{
+				"milestones": [5, 10, 15],
+				"gamma": 0.5
 			},
 			
 			"regularizers" : {

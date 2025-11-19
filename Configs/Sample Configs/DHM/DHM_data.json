@@ -1,0 +1,19 @@
+{
+	"Info": {
+		"creator": "Jannis.Maron@uni-siegen.de",
+		"created": "<25-September-2025",
+		"description": "Data paths/files for the DHM recorded Data.",
+		
+		"last_updated": "25-Sep-2025",
+		"change_log": "25-09-2025: Adopted from old voxel_object.json"
+	},
+	
+	"Data": {
+		
+		"voxel_object": "../Data/Voxel Data/HEK Cells/DHM_Tomog.pt",
+		
+		"ground_truth": "../Data/GT Data/HEK Cells/DHM/DHM_Frames.csv",
+		
+		"mask": "../Data/Mask Data/HEK Cells/DHM_Mask.pt"
+	}
+}

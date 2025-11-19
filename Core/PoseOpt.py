@@ -13,7 +13,7 @@ from Components import wavefield_processing
 
 from Components.quaternion import Quaternion
 from Components.regularizer import MultiRegularizer, L2_Regularizer, L2_Memory_Regularizer, Kalman_Regularizer
-from Components.optimizer import Optimizer
+from Components.optimizer import PoseOptimizer, Scheduler
 
 
 
@@ -94,27 +94,29 @@ class PoseOpt:
 
         self.init_epochs = pose_opt_config["PoseOpt"]["Initial"]["epochs"]
 
+        # Optimizer Settings - Define optimizer later to ensure proper reset for each frame
         self.init_optimizer_setting = pose_opt_config["PoseOpt"]["Initial"]["optimizer"]
+        self.init_scheduler_settings = pose_opt_config["PoseOpt"]["Initial"]["scheduler"]
 
-        init_regularizers = pose_opt_config["PoseOpt"]["Initial"]["regularizers"]
-        #self.init_reg = Regularizer(init_regularizers, dtype=dtype, device=device)
+        # Regularizers - First Frame does not use regularization
         self.init_reg = MultiRegularizer([], device=device)
 
 
         ### Settings for every SEQUENTIAL frame
         self.seq_epochs = pose_opt_config["PoseOpt"]["Sequential"]["epochs"]
 
+        # Optimizer Settings - Define optimizer later to ensure proper reset for each frame
         self.seq_optimizer_setting = pose_opt_config["PoseOpt"]["Sequential"]["optimizer"]
+        self.seq_scheduler_settings = pose_opt_config["PoseOpt"]["Sequential"]["scheduler"]
 
+        # Regularizers - Sequential Frames regularize Pose w.r.t. previous best pose
         seq_regularizers = pose_opt_config["PoseOpt"]["Sequential"]["regularizers"]
-        #self.seq_reg = Regularizer(seq_regularizers, dtype=dtype, device=device)
         self.seq_reg = MultiRegularizer([
             L2_Regularizer("Position", seq_regularizers["Position"], dtype=dtype, device=device),
-            #L2_Memory_Regularizer("Axis", seq_regularizers["Axis"], dtype=dtype, device=device),
             Kalman_Regularizer("Axis", seq_regularizers["Axis"], dtype=dtype, device=device, normalize=True),
             L2_Regularizer("Angle", seq_regularizers["Angle"], dtype=dtype, device=device),
         ], device=device)
-
+        
 
 
         
@@ -207,11 +209,13 @@ class PoseOpt:
             if frame_idx == self.start_frame:
                 n_epochs = self.init_epochs
                 optimizer_setting = self.init_optimizer_setting
+                scheduler_settings = self.init_scheduler_settings
                 self.regularizer = self.init_reg
             # All other sequential frames
             else:
                 n_epochs = self.seq_epochs
                 optimizer_setting = self.seq_optimizer_setting
+                scheduler_settings = self.seq_scheduler_settings
                 self.regularizer = self.seq_reg
 
 
@@ -225,7 +229,9 @@ class PoseOpt:
             #    "Axis": axis,
             #    "Angle": theta
             #}              
-            self.optimizer = Optimizer(optimizer_setting, self.pose)
+            #self.optimizer = Optimizer(optimizer_setting, self.pose)
+            self.optimizer = PoseOptimizer(self.pose, optimizer_setting)
+            self.sheduler = Scheduler(self.optimizer, scheduler_settings)
 
 
             # Define Loss function - with current GT taargets
@@ -240,6 +246,7 @@ class PoseOpt:
              # Print Settings for first and second frame
             if (frame_idx == self.start_frame or frame_idx == self.start_frame + self.frame_steps):   
                 print(self.optimizer)
+                print(self.sheduler)
                 print(self.loss)
                 print(self.regularizer)
             
@@ -255,7 +262,6 @@ class PoseOpt:
                 # Forward Simulation
                 output_field, RI_distribution = self.forward()
                 
-
                 # Post Processing
                 amp, phase = self.post_process(output_field)
                 
@@ -418,6 +424,7 @@ class PoseOpt:
         
         # Update Parameters
         self.optimizer.step()
+        self.sheduler.step()
 
         pass
 

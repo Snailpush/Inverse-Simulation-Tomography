@@ -1,6 +1,6 @@
 {
 	"Common":{
-		"config_dir": "../Configs",
+		"config_dir": "../Configs/Sample Configs",
 		"device": null,	
 		"dtype": "float32",
 		"phase_unwrap": false
@@ -8,9 +8,9 @@
 	
 	"Forward Simulation":{
 		
-		"simulation_config_file": "Sample Configs/Simulation/dhm_simulation.json",
-		"data_config_file": "Sample Configs/Data/DHM_data.json",
-		"forward_config_file": "Sample Configs/Forward/sample_movement.json",
+		"simulation_config_file": "DHM/dhm_simulation.json",
+		"data_config_file": "DHM/DHM_data.json",
+		"forward_config_file": "Debug/sample_movement.json",
 		
 		"output": {
 			"output_dir": "../Outputs/Forward Simulation/HEK Cells/DHM/Masked Simulation",
@@ -22,9 +22,9 @@
 	
 	"PoseOpt":{
 		
-		"simulation_config_file": "Sample Configs/Simulation/coded_wfs_simulation.json",
-		"data_config_file": "Sample Configs/Data/Coded_WFS_data.json",
-		"pose_opt_config_file": "Sample Configs/PoseOpt/coded_wfs_pose_opt.json",
+		"simulation_config_file": "Coded WFS/coded_wfs_simulation.json",
+		"data_config_file": "Coded WFS/Coded_WFS_data.json",
+		"pose_opt_config_file": "Coded WFS/coded_wfs_pose_opt.json",
 		
 		"output": {
 			"active": true,
@@ -38,10 +38,10 @@
 	
 	"ReconOpt":{
 		
-		"simulation_config_file": "Sample Configs/Simulation/coded_wfs_simulation.json",
-		"data_config_file": "Sample Configs/Data/Coded_WFS_data.json",
-		"recon_opt_config_file": "Sample Configs/ReconOpt/coded_wfs_recon_opt.json",
-		"recon_poses_file": "Sample Configs/ReconOpt/Pose Files/coded_wfs_poses.json",
+		"simulation_config_file": "Coded WFS/coded_wfs_simulation.json",
+		"data_config_file": "Coded WFS/Coded_WFS_data.json",
+		"recon_opt_config_file": "Coded WFS/coded_wfs_recon_opt.json",
+		"recon_poses_file": "Coded WFS/coded_wfs_poses.json",
 		
 		"output": {
 			"active": true,
@@ -53,11 +53,11 @@
 	},
 	
 	"CombOpt": {
-		"simulation_config_file": "Sample Configs/Simulation/coded_wfs_simulation.json",
-		"data_config_file": "Sample Configs/Data/Coded_WFS_data.json",
-		"pose_opt_config_file": "Sample Configs/PoseOpt/coded_wfs_pose_opt.json",
-		"recon_opt_config_file": "Sample Configs/ReconOpt/coded_wfs_recon_opt.json",
-		"comb_config_file": "Sample Configs/CombOpt/coded_wfs_comb_opt.json",
+		"simulation_config_file": "Coded WFS/coded_wfs_simulation.json",
+		"data_config_file": "Coded WFS/Coded_WFS_data.json",
+		"pose_opt_config_file": "Coded WFS/coded_wfs_pose_opt.json",
+		"recon_opt_config_file": "Coded WFS/coded_wfs_recon_opt.json",
+		"comb_config_file": "Coded WFS/coded_wfs_comb_opt.json",
 		
 		"output": {
 			"active": true,

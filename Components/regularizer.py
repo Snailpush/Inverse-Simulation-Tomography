@@ -257,12 +257,14 @@ class KalmanFilter:
 
 class Kalman_Regularizer():
 
-    def __init__(self, name, params, dtype=torch.float32, device=None, normalize=True):
+    def __init__(self, name, params, input_dim = 3, dtype=torch.float32, device=None, normalize=True):
 
         if device is None:
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.device = device
         self.dtype = dtype
+
+        self.dim = input_dim
 
         self.name = name
 
@@ -272,17 +274,17 @@ class Kalman_Regularizer():
 
         # Initialize Kalman Filter parameters - Currently hardcoded for Axis (3D vector)
         init_x = torch.tensor([1,0,0], dtype=self.dtype, device=self.device)    # Initial state
-        init_P = torch.eye(3, dtype=self.dtype, device=self.device) * 0.1       # Initial covariance
-        A = torch.eye(3, dtype=self.dtype, device=self.device)                  # State transition model
-        H = torch.eye(3, dtype=self.dtype, device=self.device)                  # Observation model
+        init_P = torch.eye(self.dim, dtype=self.dtype, device=self.device) * 0.1       # Initial covariance
+        A = torch.eye(self.dim, dtype=self.dtype, device=self.device)                  # State transition model
+        H = torch.eye(self.dim, dtype=self.dtype, device=self.device)                  # Observation model
         
-        self.w = params.get("w", [0.1,0.1,0.1])
-        self.v = params.get("v", [0.1,0.1,0.1])
+        self.w = params.get("w", [0.1] * self.dim)
+        self.v = params.get("v", [0.1] * self.dim)
 
         if isinstance(self.w, (int, float)):
-            self.w = [self.w] * 3
+            self.w = [self.w] * self.dim
         if isinstance(self.v, (int, float)): 
-            self.v = [self.v] * 3
+            self.v = [self.v] * self.dim
 
         Q = torch.diag(torch.tensor(self.w, dtype=self.dtype, device=self.device))  # Process noise covariance
         R = torch.diag(torch.tensor(self.v, dtype=self.dtype, device=self.device))  # Observation noise covariance

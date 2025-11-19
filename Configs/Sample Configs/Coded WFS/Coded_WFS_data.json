@@ -1,0 +1,21 @@
+{
+	"Info": {
+		"creator": "Jannis.Maron@uni-siegen.de",
+		"created": "<025-September-2025",
+		"description": "Data related to the Coded WFS recordings.",
+		
+		"last_updated": "25-Sep-2025",
+		"change_log": "" ,
+		"25-Sep-2025": "Created",
+		"25-Sep-2025_": "Adopting Voxel Object json config to a more general data config."
+	},
+	
+	"Data": {
+		
+		"voxel_object": "../Data/Voxel Data/HEK Cells/Raw_Coded_WFS_Tomog.pt",
+	
+		"ground_truth": "../Data/GT Data/HEK Cells/Raw Coded WFS/Coded WFS.csv",
+		
+		"mask": "../Data/Mask Data/HEK Cells/Raw_Coded_WFS_Mask.pt"
+	}
+}

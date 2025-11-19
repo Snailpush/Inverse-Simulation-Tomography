@@ -35,15 +35,11 @@
 		"epochs": 5,
 
 		"optimizer": {
-			"params":{
-				"Voxel Object": {"active": true, "lr": 1e-3}
-			},
-			"scheduler": {
-				"MultiStepLR": {
-					"milestones": [40,45],
-					"gamma": 0.5
-				}
-			}
+			"Voxel Object": {"lr": 1e-3}
+		},
+		"scheduler": {
+			"milestones": [40,45],
+			"gamma": 0.5
 		},
 		
 		

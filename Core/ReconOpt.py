@@ -15,7 +15,7 @@ from Components import wavefield_processing
 
 from Components.quaternion import Quaternion
 from Components.regularizer import MultiRegularizer, TV_Regularizer
-from Components.optimizer import Optimizer
+from Components.optimizer import ReconOptimizer, Scheduler
 
 
 from Components.debugging import DebugTimer
@@ -64,9 +64,13 @@ class ReconOpt:
         # Optimizer
         self.optimizer_setting = recon_opt_config["ReconOpt"]["optimizer"]
         params = {"Voxel Object": voxel_object.voxel_object}
-        self.optimizer = Optimizer(self.optimizer_setting, params)
+        self.optimizer = ReconOptimizer(params, self.optimizer_setting)
+        
+        scheduler_setting = recon_opt_config["ReconOpt"]["scheduler"]
+        self.scheduler = Scheduler(self.optimizer, scheduler_setting)
 
         print(self.optimizer)
+        print(self.scheduler)
 
 
         # Data Loss 
@@ -382,6 +386,7 @@ class ReconOpt:
 
         self.voxel_object.gradient_masking()
         self.optimizer.step()
+        self.scheduler.step()
 
         pass
 

@@ -1,7 +1,94 @@
 
 import torch
 
-class Optimizer:
+class Pose_Optimizer:
+    def __init__(self, pose, optimizer_setting):
+
+        self.settings = optimizer_setting
+
+        self.optim = torch.optim.Adam([
+                {"params": pose["Position"], "lr": optimizer_setting["Position"]["lr"]},
+                {"params": pose["Axis"], "lr": optimizer_setting["Axis"]["lr"]},
+                {"params": pose["Angle"], "lr": optimizer_setting["Angle"]["lr"]},
+            ])
+        
+    def zero_grad(self):
+        self.optim.zero_grad()
+
+    def step(self):
+        self.optim.step()
+
+    def __repr__(self):
+        ret = "-- Optimizer --\n"
+        ret += " Type: Adam\n"
+        ret += f"  Position: lr = {self.settings['Position']['lr']}\n"
+        ret += f"  Axis: lr = {self.settings['Axis']['lr']}\n"
+        ret += f"  Angle: lr = {self.settings['Angle']['lr']}\n"
+       
+        return ret
+    
+
+class ReconOptimizer:
+    def __init__(self, params, optimizer_setting):
+
+        self.settings = optimizer_setting
+
+        self.optim = torch.optim.Adam([
+                {"params": params["Voxel Object"], "lr": optimizer_setting["Voxel Object"]["lr"]}
+            ])
+        
+    def zero_grad(self):
+        self.optim.zero_grad()
+
+    def step(self):
+        self.optim.step()
+
+    def __repr__(self):
+        ret = "-- Optimizer --\n"
+        ret += " Type: Adam\n"
+        ret += f"  Voxel Object: lr = {self.settings['Voxel Object']['lr']}\n"
+       
+        return ret
+    
+class Scheduler:
+    def __init__(self, optimizer, scheduler_setting):
+        self.settings = scheduler_setting
+        optimizer = optimizer.optim
+
+        self.scheduler = torch.optim.lr_scheduler.MultiStepLR(
+            optimizer,
+            milestones=scheduler_setting["milestones"],
+            gamma=scheduler_setting["gamma"]
+        )
+
+    def step(self):
+        self.scheduler.step()
+
+    def __repr__(self):
+        ret = "-- Scheduler --\n"
+        ret += f" Type: MultiStepLR\n"
+        ret += f"  Milestones: {self.settings['milestones']}\n"
+        ret += f"  Gamma: {self.settings['gamma']}\n"
+        return ret
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+class Optimizer_:
     def __init__(self, optimizer_setting, params):
         self.optim_setting = optimizer_setting["params"]
         self.sched_settings = optimizer_setting.get("scheduler", {})
