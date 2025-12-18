@@ -1,0 +1,13 @@
+{
+	"Info": {
+		"creator": "Jannis.Maron@uni-siegen.de",
+		"created": "15-October-2025",
+		"description": "Overwrite Config for combining PoseOpt and ReconOpt for DHM Data",
+		
+		"30-September-2025": "Created - Copy from coded_wfs_comb_opt.json"
+	},
+	
+	"n_iter": 2
+	
+}
+	

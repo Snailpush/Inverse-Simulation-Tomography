@@ -3,278 +3,136 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class Quaternion(nn.Module):
-    def __init__(self, q, dtype=torch.float64, device=None, learnable=True):
-        """ Quaternion class
-         Represetation: q := [x,y,z,w] 
-         dtype effects does not effect the output, allowing for higher precision for quternion operations 
-        """
-        super().__init__()
-
-        if device is None:
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.device = device
-        self.dtype = dtype
-        self.learnable = learnable
-
-        
-        q_init = q.to(dtype=dtype, device=device)
-        
-        if learnable:
-            self.q = nn.Parameter(q_init)
-        else:
-            self.register_buffer("q", q_init)
-
-        
-        self.fallback_axis = torch.tensor([1,0,0], dtype=self.dtype, device=self.device)
 
 
 
-    def __repr__(self):
-        ret = f"{self.q.tolist()}"
-        return ret
-    
-    ###################################
-    # Quternion Creation Methods
-    ####################################
-
-    @classmethod
-    def from_axis_angle(cls, axis, angle, deg=True, dtype=torch.float64, device=None, learnable=True):
-        """Create a Quaternion from an axis-angle representation."""
-
-        # ignore dtype for higher precision at creation
-        axis = axis.to(dtype=dtype, device=device)
-        angle = angle.to(dtype=dtype, device=device)
-        if angle.ndim == 0:
-            angle = angle.unsqueeze(0)
-
-        # convert degree into radians if necessary
-        if deg:
-            angle = torch.deg2rad(angle)
-        
-        # ensure axis is normalized
-        axis = F.normalize(axis, dim=0)
-
-        
-        # quaternion components
-        sa = torch.sin(angle / 2)
-        ca = torch.cos(angle / 2)
+#################################################
+#
+# Quaternion representation and conversion functions
+#   q = (w, x, y, z) with real part first
+#
+#################################################
 
 
-        # Quaternion
-        q = torch.cat((axis * sa, ca))
 
-        
-        return cls(q, dtype=dtype, device=device, learnable=learnable)
-
-    @classmethod
-    def from_rotation_matrix(cls, R, dtype=torch.float64, device=None, learnable=True):
-        """
-        Create a Quaternion from a 3x3 rotation matrix.
-        """
-        if device is None:
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        R = R.to(dtype=dtype, device=device)
-
-        trace = R.trace()
-        eps = 1e-6  # For numerical stability
-
-        if trace > 0.0:
-            s = torch.sqrt(trace + 1.0) * 2  # s = 4 * qw
-            qw = 0.25 * s
-            qx = (R[2, 1] - R[1, 2]) / s
-            qy = (R[0, 2] - R[2, 0]) / s
-            qz = (R[1, 0] - R[0, 1]) / s
-        else:
-            # Identify the largest diagonal element
-            if (R[0, 0] > R[1, 1]) and (R[0, 0] > R[2, 2]):
-                s = torch.sqrt(1.0 + R[0, 0] - R[1, 1] - R[2, 2] + eps) * 2  # s = 4 * qx
-                qw = (R[2, 1] - R[1, 2]) / s
-                qx = 0.25 * s
-                qy = (R[0, 1] + R[1, 0]) / s
-                qz = (R[0, 2] + R[2, 0]) / s
-            elif R[1, 1] > R[2, 2]:
-                s = torch.sqrt(1.0 + R[1, 1] - R[0, 0] - R[2, 2] + eps) * 2  # s = 4 * qy
-                qw = (R[0, 2] - R[2, 0]) / s
-                qx = (R[0, 1] + R[1, 0]) / s
-                qy = 0.25 * s
-                qz = (R[1, 2] + R[2, 1]) / s
-            else:
-                s = torch.sqrt(1.0 + R[2, 2] - R[0, 0] - R[1, 1] + eps) * 2  # s = 4 * qz
-                qw = (R[1, 0] - R[0, 1]) / s
-                qx = (R[0, 2] + R[2, 0]) / s
-                qy = (R[1, 2] + R[2, 1]) / s
-                qz = 0.25 * s
-
-        q = torch.stack([qx, qy, qz, qw])
-        q = F.normalize(q, dim=0)  # Ensure unit quaternion
-        return cls(q, dtype=dtype, device=device, learnable=learnable)
-        
+import torch
+import numpy as np
 
 
-    ##################################
-    # Quternion Output Conversions
-    ##################################
+def to_axis_angle(quaternions):
+    """
+    Convert quaternions to axis-angle representation.
 
-    def to_rotation_matrix(self, dtype=torch.float32):
-        """Convert Quternion to Rotation matrix"""
-        x,y,z,w = self.q
+    Args:
+        quaternions: Tensor of shape (..., 4), real part first (w, x, y, z).
 
-        R = torch.stack([
-            torch.stack([1 - 2 * (y**2 + z**2), 2 * (x*y - z*w), 2 * (x*z + y*w)]),
-            torch.stack([2 * (x*y + z*w), 1 - 2 * (x**2 + z**2), 2 * (y*z - x*w)]),
-            torch.stack([2 * (x*z - y*w), 2 * (y*z + x*w), 1 - 2 * (x**2 + y**2)])
-        ])
-    
-        # ignore quternion dtype for defined dtype
-        if dtype is not None:
-            R = R.to(dtype=dtype)  # Only cast at the very end if requested
-        else:
-            R = R.to(dtype=self.q.dtype)
-        return R
+    Returns:
+        Tensor of shape (..., 3): axis-angle vectors.
+    """
 
 
-    def to_axis_angle(self, deg=True, dtype=torch.float32):
-        """Convert Quaternion to axis / angle"""
-        x,y,z,w = self.q
+    # Normalize to be safe
+    quaternions = quaternions / quaternions.norm(p=2, dim=-1, keepdim=True).clamp_min(1e-8)
 
-        # safty clamp w to avoid numerical issues
-        w = torch.clamp(w, -1.0, 1.0)
+    w = quaternions[..., :1]           # (..., 1)
+    v = quaternions[..., 1:]           # (..., 3)
+    v_norm = v.norm(p=2, dim=-1, keepdim=True)  # (..., 1)
 
-        # Angle
-        angle  = 2 * torch.arccos(w)
-        if deg:
-            angle = torch.rad2deg(angle)
-        angle = angle.to(dtype=dtype)
+    # Compute full rotation angle
+    angles = 2.0 * torch.atan2(v_norm, w)
 
-        s = torch.sqrt(1-w**2)
-        
-        # Angle is very close to zero
-        if torch.abs(s) < 1e-6:
-            ax = self.fallback_axis[0]
-            ay = self.fallback_axis[1]
-            az = self.fallback_axis[2]
-            #print(f"Trigger: Angle close to 0: {angle.item()}")
-            #print(f"Fallback axis: {self.fallback_axis}")
-        
-        # Axis definition
-        else:
+    # Avoid division by zero (small angles)
+    small = v_norm < 1e-8
+    scale = torch.where(
+        small,
+        torch.ones_like(v_norm),          # arbitrary axis for tiny angles
+        angles / v_norm
+    )
 
-            ax = x / torch.sqrt(1 - w**2)
-            ay = y / torch.sqrt(1 - w**2)
-            az = z / torch.sqrt(1 - w**2)
+    axis_angle = v * scale
+    return axis_angle
 
+def split_axis_angle(axis_angle):
+    """
+    Split axis-angle representation into axis and angle.
 
-        
-        axis = torch.stack([ax,ay,az])
-        axis = F.normalize(axis, dim=0)
-        axis = axis.to(dtype=dtype)
-
-        return axis, angle
-    
-
-    ##################################
-    #  Basic Quaternion Operations
-    ##################################
+    Args:
+        axis_angle: Tensor of shape (..., 3), where the magnitude is
+            the rotation angle in radians around the vector's direction.    
+    Returns:
+        A tuple of two tensors:
+            - axes: Tensor of shape (..., 3), unit vectors.
+            - angles: Tensor of shape (...,), rotation angles in radians.
+    """
 
 
-    def scalar_part(self):
-        _,_,_,w = self.q
-        return w
-
-    def vector_part(self):
-        x,y,z,_ = self.q
-        vec = torch.stack([x,y,z])
-        return vec
-    
-    def __add__(self, other):
-        if isinstance(other, Quaternion):
-            return Quaternion(self.q + other.q, dtype=self.dtype, device=self.device, learnable=self.learnable)
-        else:
-            raise TypeError(f"Unsupported type for addition: {type(other)}. Expected Quaternion.")
-
-    def __sub__(self, other):
-        if isinstance(other, Quaternion):
-            return Quaternion(self.q - other.q, dtype=self.dtype, device=self.device, learnable=self.learnable)
-        else:
-            raise TypeError(f"Unsupported type for addition: {type(other)}. Expected Quaternion.")
-
-    def __mul__(self, other):
-
-        # Scalar multiplication
-        if isinstance(other, (int, float, torch.Tensor)) and not isinstance(other, Quaternion):
-            return Quaternion(self.q * other, dtype=self.dtype, device=self.device, learnable=self.learnable)
-
-        elif isinstance(other, Quaternion):
-            x1, y1, z1, w1 = self.q
-            x2, y2, z2, w2 = other.q
-
-            x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2
-            y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2
-            z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
-            w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
-
-            result_q = torch.stack([x, y, z, w])
-            return Quaternion(result_q, dtype=self.dtype, device=self.device, learnable=self.learnable)
-
-        else:
-            raise TypeError(f"Unsupported type for multiplication: {type(other)}. Expected Quaternion.")
-        
-    def __rmul__( self, other):   
-        return self.__mul__(other)
-
-    def __truediv__(self, scalar):
-
-        if scalar == 0: 
-            raise( ZeroDivisionError )
-        
-        x,y,z,w = self.q
-        result_q = torch.stack([x / scalar, y / scalar, z / scalar, w / scalar])
-        return Quaternion(result_q, dtype=self.dtype, device=self.device, learnable=self.learnable)
-
-    def __itruediv__(self, scalar):
-
-        if scalar == 0: 
-            raise( ZeroDivisionError )
-        
-        x,y,z,w = self.q
-        self.q = torch.stack([x / scalar, y / scalar, z / scalar, w / scalar])
+    angles = torch.norm(axis_angle, p=2, dim=-1)  # (...,)
+    axes = axis_angle / angles.unsqueeze(-1).clamp_min(1e-8)  # (..., 3)
+    return axes, angles
 
 
-    def norm(self):
-        norm = torch.norm(self.q)
-        return norm
 
-    def normalize(self):
-        self.q.data = F.normalize(self.q.data, dim=0)
+def from_axis_angle(axis_angle: torch.Tensor) -> torch.Tensor:
+    """
+    Convert rotations given as axis/angle to quaternions.
 
-    def conjugate(self):
-        x, y, z, w = self.q
-        return Quaternion(torch.stack([-x, -y, -z, w]), dtype=self.dtype, device=self.device, learnable=self.learnable)
-        
-    def reciprocal(self):
-        return self.conjugate() / ( self.norm()**2)
+    Args:
+        axis_angle: Tensor of shape (..., 3), where the magnitude is
+            the rotation angle in radians around the vector's direction.
 
-    def distance(self, other):
-        return torch.min(
-            torch.sum((self.q - other.q) ** 2),
-            torch.sum((self.q + other.q) ** 2)
-        )
-    
-    def set_fallback_axis(self, axis):
-        self.fallback_axis = axis.to(dtype=self.dtype, device=self.device)
+    Returns:
+        Tensor of shape (..., 4): quaternions with real part first.
+    """
+    angles = torch.norm(axis_angle, p=2, dim=-1, keepdim=True)  # (..., 1)
+    half_angles = 0.5 * angles
 
-    ##################################
-    #  Quaternion Operations
-    ##################################
-    def slerp(self, other, alpha):
-        if not isinstance(other, Quaternion):
-            raise TypeError(f"Unsupported type for slerp: {type(other)}. Expected Quaternion.")
-        
-        alpha = alpha#.to(dtype=self.dtype, device=self.device)
+    # Handle small angles robustly
+    # sinc(x) = sin(pi*x)/(pi*x), so torch.sinc(half_angles/pi) = sin(half_angles)/half_angles
+    sin_half_over_angle = torch.sinc(half_angles / torch.pi) * 0.5
 
-        q1 = self.q
-        q2 = other.q
+    quats = torch.cat(
+        [torch.cos(half_angles), axis_angle * sin_half_over_angle], dim=-1
+    )
+    return quats
+
+
+
+def to_matrix(quaternions, dtype):
+    """
+    Convert quaternions to rotation matrices.
+
+    Args:
+        quaternions: Tensor of shape (..., 4), real part first (w, x, y, z).
+
+    Returns:
+        Tensor of shape (..., 3, 3): rotation matrices.
+    """
+    # Normalize to unit quaternions
+    quaternions = quaternions / quaternions.norm(p=2, dim=-1, keepdim=True).clamp_min(1e-8)
+
+    w, x, y, z = torch.unbind(quaternions, dim=-1)
+    two_s = 2.0 / (quaternions * quaternions).sum(-1, keepdim=True)
+
+    o = torch.stack([
+        1 - two_s * (y * y + z * z),
+        two_s * (x * y - z * w),
+        two_s * (x * z + y * w),
+
+        two_s * (x * y + z * w),
+        1 - two_s * (x * x + z * z),
+        two_s * (y * z - x * w),
+
+        two_s * (x * z - y * w),
+        two_s * (y * z + x * w),
+        1 - two_s * (x * x + y * y),
+    ], dim=-1)
+
+    R = o.reshape(quaternions.shape[:-1] + (3, 3))
+    R = R.to(dtype=dtype)
+    return R
+
+
+def slerp(q1, q2, alpha):
 
         # Normalize both quaternions to ensure valid rotations
         q1 = F.normalize(q1, dim=0)
@@ -294,8 +152,8 @@ class Quaternion(nn.Module):
         if dot > 0.9995:
             result = (1 - alpha) * q1 + alpha * q2
             result = F.normalize(result, dim=0)
-            return Quaternion(result, dtype=self.dtype, device=self.device, learnable=self.learnable)
-
+            return result
+        
         theta_0 = torch.acos(dot)  # angle between input vectors
         sin_theta_0 = torch.sin(theta_0)
 
@@ -306,54 +164,28 @@ class Quaternion(nn.Module):
         s2 = sin_theta / sin_theta_0
 
         result = s1 * q1 + s2 * q2
-        return Quaternion(result, dtype=self.dtype, device=self.device, learnable=self.learnable)
-        
+        return result
 
-    def lerp(self, other, alpha):
-        if not isinstance(other, Quaternion):
-            raise TypeError(f"Unsupported type for lerp: {type(other)}. Expected Quaternion.")
 
-        q1 = self.q
-        q2 = other.q
+def norm(quaternions: torch.Tensor) -> torch.Tensor:
+        """
+        Compute the L2 norm of quaternions.
+        Args:
+            quaternions: Tensor of shape (..., 4).
+        Returns:
+            Tensor of shape (...,): L2 norms.
+        """
+        norm = torch.norm(quaternions, p=2, dim=-1)
+        return norm
 
-        # Normalize both quaternions to ensure valid rotations
-        q1 = F.normalize(q1, dim=0)
-        q2 = F.normalize(q2, dim=0)
+def normalize(quaternions: torch.Tensor) -> torch.Tensor:
+    """Normalize quaternions to unit length.
+    Args:
+        quaternions: Tensor of shape (..., 4).
+        Returns:
+        Tensor of shape (..., 4): normalized quaternions.
+    """
+    quaternions = F.normalize(quaternions, p=2, dim=-1)
+    return quaternions
 
-        qr = (1 - alpha) * q1 + alpha * q2
-        qr = F.normalize(qr, dim=0)
 
-        # Linear interpolation between two quaternions
-        return Quaternion(qr, dtype=self.dtype, device=self.device, learnable=self.learnable)
-    
-
-    ##################################
-    #  Torch Operations
-    ##################################
-    def detach(self):
-        return Quaternion(self.q.detach(), self.dtype, self.device, learnable=False)
-    
-    def to(self, device=None, dtype=None):
-        device = device or self.device
-        dtype = dtype or self.dtype
-        q_new = self.q.to(dtype=dtype, device=device)
-        return Quaternion(q_new, dtype=dtype, device=device, learnable=self.learnable)
-
-    def cpu(self):
-        self.q = nn.Parameter(self.q.cpu(), learnable=self.learnable)
-        self.device = torch.device("cpu")
-        return self
-
-    def numpy(self):
-        return self.q.detach().cpu().numpy()
-    
-
-    def is_learnable(self, learnable):
-        return Quaternion(self.q.detach().clone(), dtype=self.dtype, device=self.device, learnable=learnable)
-
-    def clone(self):
-        q_clone = self.q.clone()
-        return Quaternion(q_clone, self.dtype, self.device)
-
-    
-    

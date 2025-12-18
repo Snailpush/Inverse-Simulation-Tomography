@@ -1,0 +1,26 @@
+{
+	"transforms":{
+		"field": {},
+		"amp": {},
+		"phase": {}
+		
+	},
+	
+	"Movement": {
+		"time_steps": 181,
+		"unit": "um",
+		"Positions": [
+			{ "pos": [12.5, 12.5, 12.5], "time": 0 }
+		],
+		"Offsets": [
+			{ "offset": [0, 0, 0], "time": 0 }
+		],
+		"Rotations": [
+			{ "axis": [1.0, 0.0, 0.0], "theta": 0, "time": 0 },
+			{ "axis": [1.0, 0.0, 0.0], "theta": 90, "time": 45},
+			{ "axis": [1.0, 0.0, 0.0], "theta": 180, "time": 90},
+			{ "axis": [1.0, 0.0, 0.0], "theta": 270, "time": 135},
+			{ "axis": [1.0, 0.0, 0.0], "theta": 360, "time": 180}
+		]
+	}
+}

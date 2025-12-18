@@ -2,7 +2,7 @@
 	"Common":{
 		"config_dir": "../Configs/Sample Configs",
 		"device": null,	
-		"dtype": "float32",
+		"dtype": "float64",
 		"phase_unwrap": false
 	},
 	
@@ -10,27 +10,25 @@
 		
 		"simulation_config_file": "DHM/dhm_simulation.json",
 		"data_config_file": "DHM/DHM_data.json",
-		"forward_config_file": "Debug/sample_movement.json",
+		"forward_config_file": "Debug/Sim Movements/full_rotation.json",
 		
 		"output": {
-			"output_dir": "../Outputs/Forward Simulation/HEK Cells/DHM/Masked Simulation",
-			"run_name": "(4)",
-			"options":  ["phase", "amplitude", "slice", "sim_space"]
+			"output_dir": "../Outputs/Forward Simulation/HEK Cells/DHM/TrackOpt - SimSpace",
+			"options":  ["phase", "amplitude", "slice", "render"]
 		}
 		
 	},
 	
 	"PoseOpt":{
 		
-		"simulation_config_file": "Coded WFS/coded_wfs_simulation.json",
-		"data_config_file": "Coded WFS/Coded_WFS_data.json",
-		"pose_opt_config_file": "Coded WFS/coded_wfs_pose_opt.json",
+		"simulation_config_file": "DHM/dhm_simulation.json",
+		"data_config_file": "DHM/DHM_data.json",
+		"pose_opt_config_file": "DHM/DHM_pose_opt.json",
 		
 		"output": {
 			"active": true,
-			"output_dir": "../Outputs/PoseOpt/HEK Cells/Coded WFS/Sample",
-			"options": ["losses", "amps", "phases", "slices", "renders"],
-			"wandb": false
+			"output_dir": "../Outputs/PoseOpt/HEK Cells/DHM/Sample",
+			"options": ["losses", "amps", "phases", "slices", "renders"]
 		}
 		
 		
@@ -38,30 +36,28 @@
 	
 	"ReconOpt":{
 		
-		"simulation_config_file": "Coded WFS/coded_wfs_simulation.json",
-		"data_config_file": "Coded WFS/Coded_WFS_data.json",
-		"recon_opt_config_file": "Coded WFS/coded_wfs_recon_opt.json",
-		"recon_poses_file": "Coded WFS/coded_wfs_poses.json",
+		"simulation_config_file": "DHM/dhm_simulation.json",
+		"data_config_file": "DHM/DHM_data.json",
+		"recon_opt_config_file": "DHM/dhm_recon_opt.json",
+		"recon_poses_file": "Debug/Optimized Poses/dhm_poses_sample.json",
 		
 		"output": {
 			"active": true,
-			"output_dir": "../Outputs/ReconOpt/HEK Cells/Coded WFS/Sample",
-			"options": ["slices", "renders", "amps", "phases"],
-			"wandb": false
+			"output_dir": "../Outputs/ReconOpt/HEK Cells/DHM/Sample",
+			"options": ["slices", "renders", "amps", "phases"]
 		}
 	
 	},
 	
 	"CombOpt": {
-		"simulation_config_file": "Coded WFS/coded_wfs_simulation.json",
-		"data_config_file": "Coded WFS/Coded_WFS_data.json",
-		"pose_opt_config_file": "Coded WFS/coded_wfs_pose_opt.json",
-		"recon_opt_config_file": "Coded WFS/coded_wfs_recon_opt.json",
-		"comb_config_file": "Coded WFS/coded_wfs_comb_opt.json",
+		"simulation_config_file": "DHM/dhm_simulation.json",
+		"data_config_file": "DHM/DHM_data.json",
+		"pose_opt_config_file": "DHM/dhm_pose_opt.json",
+		"recon_opt_config_file": "DHM/dhm_recon_opt.json",
+		"comb_config_file": "DHM/dhm_comb_opt.json",
 		
 		"output": {
-			"active": true,
-			"output_dir": "../Outputs/CombOpt/HEK Cells/Coded WFS/Sample",
+			"output_dir": "../Outputs/CombOpt/HEK Cells/DHM/12_12_25 Long + Always Update",
 			"options": ["losses", "slices", "renders", "amps", "phases"]
 		}
 	}

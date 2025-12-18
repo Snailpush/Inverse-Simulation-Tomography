@@ -1,19 +1,19 @@
 import torch
+import torch.nn as nn
 import math
 import time
 
 from Components import data_loader
 from Components import reporting
-from Components import losses
-
-
-
+#from Components import losses
 from Components import utils
-from Components import wavefield_processing
-
-from Components.quaternion import Quaternion
-from Components.regularizer import MultiRegularizer, L2_Regularizer, L2_Memory_Regularizer, Kalman_Regularizer
-from Components.optimizer import PoseOptimizer, Scheduler
+#from Components import wavefield_processing
+from Components import quaternion
+#from Components.quaternion import Quaternion
+from Components.regularizer import Position_L2_Regularizer, Rotation_Kalman_Regularizer, None_Regularizer
+from Components.optimizer import Pose_Optimizer, Scheduler
+from Components.wavefield_processing import Transforms
+from Components.losses import MSE_NCC_Loss, MSE_Loss
 
 
 
@@ -49,17 +49,14 @@ class PoseOpt:
 
         # Ground Truth Data
         self.gt_dataset = gt_dataset
-        
-        
-        # Data Loss 
-        self.loss_fn = pose_opt_config["PoseOpt"]["loss_fn"]
-        self.weights = pose_opt_config["PoseOpt"]["weights"]
 
 
 
-        # Post processing
-        self.gt_transforms = pose_opt_config["PoseOpt"]["gt_transforms"]
-        self.sim_transforms = pose_opt_config["PoseOpt"]["sim_transforms"]
+        # Post processing / Domain Adaptation Transforms
+        self.gt_transforms = Transforms(pose_opt_config["PoseOpt"]["gt_transforms"])
+        self.sim_transforms = Transforms(pose_opt_config["PoseOpt"]["sim_transforms"])
+        print(f"-- Ground Truth Transforms -- \n{self.gt_transforms}")
+        print(f"-- Post-Processing Transforms -- \n{self.sim_transforms}")    
 
 
         # Start/End frames
@@ -76,17 +73,31 @@ class PoseOpt:
 
 
 
-        # Initial Pose
+        # Initial Pose - Pose of the first frame
         self.pose_unit = pose_opt_config["PoseOpt"]["unit"]
         position = pose_opt_config["PoseOpt"]["Position"]
         axis = pose_opt_config["PoseOpt"]["Axis"]
         angle =  pose_opt_config["PoseOpt"]["Angle"]
 
-        self.init_position = torch.tensor(position, dtype=dtype, device=device)
-        self.init_rotation_axis = torch.tensor(axis, dtype=dtype, device=device)
-        self.init_angle = torch.tensor([angle], dtype=dtype, device=device)
+        init_position = torch.tensor(position, dtype=dtype, device=device)
+
+        # 64-bit tensors for higher precision quternions
+        init_rotation_axis = torch.tensor(axis, dtype=torch.float64, device=device)
+        init_angle = torch.tensor([angle], dtype=torch.float64, device=device)
+
+        # convert axis angle to quaternion
+        init_axis_angle = init_rotation_axis * torch.deg2rad(init_angle).unsqueeze(-1)
+        init_quaternion = quaternion.from_axis_angle(init_axis_angle)[0]
+
         self.offset = torch.tensor([0,0,0], dtype=dtype, device=device)
 
+
+
+
+        # Data Loss 
+        self.weights = pose_opt_config["PoseOpt"]["weights"]
+        self.loss_fn = MSE_NCC_Loss(weights=self.weights)
+        print(self.loss_fn)
 
 
 
@@ -99,7 +110,9 @@ class PoseOpt:
         self.init_scheduler_settings = pose_opt_config["PoseOpt"]["Initial"]["scheduler"]
 
         # Regularizers - First Frame does not use regularization
-        self.init_reg = MultiRegularizer([], device=device)
+        self.init_pos_reg = None_Regularizer("Position")
+        self.init_quat_reg = None_Regularizer("Quaternion")
+
 
 
         ### Settings for every SEQUENTIAL frame
@@ -111,13 +124,9 @@ class PoseOpt:
 
         # Regularizers - Sequential Frames regularize Pose w.r.t. previous best pose
         seq_regularizers = pose_opt_config["PoseOpt"]["Sequential"]["regularizers"]
-        self.seq_reg = MultiRegularizer([
-            L2_Regularizer("Position", seq_regularizers["Position"], dtype=dtype, device=device),
-            Kalman_Regularizer("Axis", seq_regularizers["Axis"], dtype=dtype, device=device, normalize=True),
-            L2_Regularizer("Angle", seq_regularizers["Angle"], dtype=dtype, device=device),
-        ], device=device)
+        self.seq_pos_reg = Position_L2_Regularizer(seq_regularizers["Position"])
+        self.seq_quat_reg = Rotation_Kalman_Regularizer(seq_regularizers["Quaternion"], dtype=dtype, device=device, normalize=True)
         
-
 
         
         ### Best Settings Initilization
@@ -131,17 +140,13 @@ class PoseOpt:
             },
 
             "Pose":{
-                "Position": self.init_position,
-                "Axis": self.init_rotation_axis,
-                "Angle": self.init_angle,
+                "Position": init_position,
+                "Quaternion": init_quaternion,
             },
             "Amp": None,
             "Phase": None,
             "RI Distribution": None
         }
-      
-
-
 
         pass
 
@@ -159,9 +164,9 @@ class PoseOpt:
             print()
 
 
-            # Update Logger for current frame
-            self.logger.new_frame(frame_idx)
+            ### New Frame Setup ###
 
+            self.logger.new_frame(frame_idx) # Internal Counter
 
             # Reset Best Loss for current frame
             self.best_setting["Epoch"] = -1
@@ -175,7 +180,7 @@ class PoseOpt:
 
             # Get Groundtruth wavefield components for current frame
             frame = self.gt_dataset[frame_idx % len(self.gt_dataset)] 
-            _, gt_amp, gt_phase = frame.get_ground_truth(self.propagator, self.gt_transforms)
+            _, self.gt_amp, self.gt_phase = frame.get_ground_truth(self.propagator, self.gt_transforms)
 
 
 
@@ -183,24 +188,17 @@ class PoseOpt:
             # Get Best Pose of previous frame
             prev_best_pose = self.best_setting["Pose"]
 
-            # Initialize Pose Parameters for current frame
-            pos = prev_best_pose["Position"].clone().detach().to(self.device).requires_grad_(True)
-            axis = prev_best_pose["Axis"].clone().detach().to(self.device).requires_grad_(True)
-            theta = prev_best_pose["Angle"].clone().detach().to(self.device).requires_grad_(True)
+            # Set Initial Pose for current frame
+            pos = prev_best_pose["Position"].clone().detach().to(self.device)
+            quat = prev_best_pose["Quaternion"].clone().detach().to(self.device)
+
+            pos = nn.Parameter(pos)
+            quat = nn.Parameter(quat)
 
             self.pose = {
                 "Position": pos,
-                "Axis": axis,
-                "Angle": theta
+                "Quaternion": quat
             }
-
-
-            print(f"-- Start/Prev Pose --")
-            print(f" Position: {reporting.print_values(pos)}")
-            print(f" Axis: {reporting.print_values(axis)}")
-            print(f" Angle: {reporting.print_values(theta)}")
-            print()
-
 
 
 
@@ -210,45 +208,45 @@ class PoseOpt:
                 n_epochs = self.init_epochs
                 optimizer_setting = self.init_optimizer_setting
                 scheduler_settings = self.init_scheduler_settings
-                self.regularizer = self.init_reg
+                self.pos_reg = self.init_pos_reg
+                self.quat_reg = self.init_quat_reg
             # All other sequential frames
             else:
                 n_epochs = self.seq_epochs
                 optimizer_setting = self.seq_optimizer_setting
                 scheduler_settings = self.seq_scheduler_settings
-                self.regularizer = self.seq_reg
+                self.pos_reg = self.seq_pos_reg
+                self.quat_reg = self.seq_quat_reg
 
 
 
 
             # Define Optimizer
 
-            # Optimizable parameters
-            #params = {
-            #    "Position": pos,
-            #    "Axis": axis,
-            #    "Angle": theta
-            #}              
-            #self.optimizer = Optimizer(optimizer_setting, self.pose)
-            self.optimizer = PoseOptimizer(self.pose, optimizer_setting)
-            self.sheduler = Scheduler(self.optimizer, scheduler_settings)
+            self.optimizer = Pose_Optimizer(self.pose, optimizer_setting)
+            self.scheduler = Scheduler(self.optimizer, scheduler_settings)
 
 
-            # Define Loss function - with current GT taargets
-            self.loss = losses.Loss_fn(self.loss_fn, gt_amp, gt_phase, self.weights)
-            
 
             # Update the targets of the regularizer with the previous best pose
-            self.regularizer.update(prev_best_pose)
+            self.pos_reg.update(prev_best_pose["Position"])
+            self.quat_reg.update(prev_best_pose["Quaternion"])
        
 
 
              # Print Settings for first and second frame
-            if (frame_idx == self.start_frame or frame_idx == self.start_frame + self.frame_steps):   
+            if (frame_idx == self.start_frame or frame_idx == self.start_frame + self.frame_steps):  
+                print(f"Epochs: {n_epochs}\n") 
                 print(self.optimizer)
-                print(self.sheduler)
-                print(self.loss)
-                print(self.regularizer)
+                print(self.scheduler)
+                print(self.pos_reg)
+                print(self.quat_reg)
+
+            print(f"-- Start/Prev Pose --")
+            print(f" Position: {reporting.print_values(pos, decimals=3)}")
+            print(f" Quternion: {reporting.print_values(quat, decimals=3)}")
+            print()
+                
             
 
 
@@ -266,26 +264,25 @@ class PoseOpt:
                 amp, phase = self.post_process(output_field)
                 
                 # Compute Loss
-                sim_losses = self.compute_loss(amp, phase, reg_dict=self.pose)
-                
+                loss, loss_components = self.compute_loss(amp, phase)
+
 
                 # Log / Print / Visualize Current Epoch
                 with torch.no_grad():
                     # Update Best Pose Tracking
-                    self.update_best_setting(epoch, sim_losses, amp, phase, RI_distribution)
-
+                    self.update_best_setting(epoch, loss, amp, phase, RI_distribution)
                     # Print Current Epoch (Loss + Pose)
-                    reporting.print_epoch_update(epoch, sim_losses, self.pose,
-                                    print_update=5, indent=2, verbose=True)                
+                    reporting.print_epoch_update(epoch, loss, loss_components, self.pose,
+                                    print_update=20, indent=2, verbose=True)        
                     # Log Current Epoch
-                    self.logger.log_progress(epoch, sim_losses, self.pose)
+                    self.logger.log_progress(epoch, loss, loss_components, self.pose)
                     # Log/Plot Visualizations
-                    self.logger.vis_progress(epoch, amp, phase, gt_amp, gt_phase, self.sim_space.spatial_resolution,
-                                        self.pose, None, self.pose_unit, vis_updates=10)
+                    self.logger.vis_progress(epoch, amp, phase, self.gt_amp, self.gt_phase, self.sim_space.spatial_resolution,
+                                        self.pose, self.pose_unit, vis_updates=10)
                 
                 
                 # Update Parameters
-                self.optimize(sim_losses)
+                self.optimize(loss)
 
 
                 pass  # end train interation loop
@@ -305,36 +302,23 @@ class PoseOpt:
                 amp, phase = self.post_process(output_field)
                 
                 # Compute Loss
-                sim_losses = self.compute_loss(amp, phase, reg_dict=self.pose)
+                loss, loss_components = self.compute_loss(amp, phase)
 
 
                 # Update Best Pose Tracking
-                self.update_best_setting(n_epochs, sim_losses, amp, phase, RI_distribution)
+                self.update_best_setting(n_epochs, loss, amp, phase, RI_distribution)
+                reporting.print_epoch_update(n_epochs, loss, loss_components, self.pose,
+                                    print_update=20, indent=2, verbose=True)  
 
                 # Log Last Epoch (Loss + Pose)
-                self.logger.log_progress(n_epochs, sim_losses, self.pose)
+                self.logger.log_progress(n_epochs, loss, loss_components, self.pose)
                 # Log/Plot Visualizations
-                self.logger.vis_progress(n_epochs, amp, phase, gt_amp, gt_phase, self.sim_space.spatial_resolution,
-                                    self.pose, None, self.pose_unit, vis_updates=10)
+                self.logger.vis_progress(n_epochs, amp, phase, self.gt_amp, self.gt_phase, self.sim_space.spatial_resolution,
+                                    self.pose, self.pose_unit, vis_updates=10)
                 
 
+            self.frame_summary(frame_idx)
 
-                # --- Best Setting for Current Frame ---
-                self.logger.log_best_setting(frame_idx, self.best_setting, self.pose_unit)
-                self.logger.vis_best_setting(self.best_setting, gt_amp, gt_phase, self.sim_space.spatial_resolution, self.pose_unit)
-
-                print()
-                print("Best Setting:")
-                print(f"  Epoch: {self.best_setting['Epoch']}")
-                print(f"  Loss: {round(self.best_setting["Loss"]['Total Loss'], 7)}")
-                print(f"  Data Loss: {round(self.best_setting["Loss"]['Data Loss'], 7)}")
-                print(f"  Reg Loss: {round(self.best_setting["Loss"]['Reg Loss'], 7)}")
-                print(f"  Position: {reporting.print_values(self.best_setting["Pose"]['Position'], decimals=3)}")
-                print(f"  Axis: {reporting.print_values(self.best_setting["Pose"]['Axis'], decimals=3)}")
-                print(f"  Angle: {reporting.print_values(self.best_setting["Pose"]['Angle'], decimals=3)}")
-                print()
-
-                pass # end final epoch
                 
             pass # end frame loop
 
@@ -350,18 +334,12 @@ class PoseOpt:
     def forward(self):
 
         pos = self.pose["Position"]
-        axis = self.pose["Axis"]
-        theta = self.pose["Angle"]
+        quat = self.pose["Quaternion"]
 
-
-        # normalize axis
-        with torch.no_grad():
-            axis /= axis.norm()
-
-         # --- Convert Axis-Angle to Rotation Matrix ---
-        rot_q = Quaternion.from_axis_angle(axis, theta, dtype=torch.float64, device=self.device, learnable=False)
-        R = rot_q.to_rotation_matrix(dtype=self.dtype)
-
+        # Ensure Normalization
+        q = quat.unsqueeze(0)
+        q = quaternion.normalize(q)
+        R = quaternion.to_matrix(q, dtype=self.dtype)[0]
 
          # --- Add Voxel Object to Simulation Space with corresponding pose ---        	
         #RI_distribution = self.sim_space.add_voxel_object(self.voxel_object, pos, self.offset, R, self.pose_unit)
@@ -378,40 +356,51 @@ class PoseOpt:
          # --- Post Processing ---
                 
         # Field Transforms
-        output_field = wavefield_processing.apply_field_transforms(output_field, self.sim_transforms["field"])
+        output_field = self.sim_transforms.apply_field_transforms(output_field)
 
         # Get Amp / Phase
         amp = torch.abs(output_field)
         phase = torch.angle(output_field)
 
         # Amplitude/Phase Transforms
-        amp = wavefield_processing.apply_component_transforms(amp, self.sim_transforms["amp"])
-        phase = wavefield_processing.apply_component_transforms(phase, self.sim_transforms["phase"])
+        amp = self.sim_transforms.apply_amp_transforms(amp)
+        phase = self.sim_transforms.apply_phase_transforms(phase)
 
         return amp, phase
     
-    def compute_loss(self, amp, phase, reg_dict):
+    def compute_loss(self, amp, phase):
 
          # --- Compute Loss ---
 
         # Primary Data Loss
-        data_loss, loss_components = self.loss(amp, phase)
+        data_loss, loss_components = self.loss_fn(self.gt_amp, self.gt_phase, amp, phase)
+        #loss_components["Data Loss"] = data_loss.item()
 
         # Regularization Loss
-        reg_loss, loss_components = self.regularizer(reg_dict, loss_components)
 
+        # Position Regularization        
+        pos_reg_loss = self.pos_reg(self.pose["Position"])
+        loss_components["Position Reg Loss"] = pos_reg_loss.item()
+
+        # Rotation Regularization
+        quat_reg_loss = self.quat_reg(self.pose["Quaternion"])
+        loss_components["Quaternion Reg Loss"] = quat_reg_loss.item()
+
+        # Total Regularization Loss
+        reg_loss = pos_reg_loss + quat_reg_loss
+        #loss_components["Reg Loss"] = reg_loss.item()
+        
 
         # Total Loss
         total_loss = data_loss + reg_loss
 
         loss = {
             "Total Loss": total_loss,
-            "Data Loss": data_loss,
-            "Reg Loss": reg_loss,
-            "Components": loss_components
+            "Data Loss": data_loss.item(),
+            "Reg Loss": reg_loss.item(),
         }
 
-        return loss
+        return loss, loss_components
 
 
     def optimize(self, loss):
@@ -424,31 +413,60 @@ class PoseOpt:
         
         # Update Parameters
         self.optimizer.step()
-        self.sheduler.step()
+        self.scheduler.step()
+
+        # Re-normalize Quaternion
+        with torch.no_grad():
+            q = self.pose["Quaternion"].unsqueeze(0)
+            q = quaternion.normalize(q)
+            self.pose["Quaternion"].data = q[0]
 
         pass
 
-    def update_best_setting(self, epoch, sim_losses, amp, phase, RI_distribution):
+    def update_best_setting(self, epoch, loss, amp, phase, RI_distribution):
         """Update the variables of current frame with the best found variables (w.r.t. primary data loss)"""
 
 
-        if sim_losses["Total Loss"] <= self.best_setting["Loss"]["Total Loss"]:
+        if True:
+        #if loss["Total Loss"] <= self.best_setting["Loss"]["Total Loss"]:
 
             self.best_setting["Epoch"] = epoch
             self.best_setting["Loss"].update({
-                "Total Loss": sim_losses["Total Loss"].detach().cpu().item(),
-                "Data Loss": sim_losses["Data Loss"].detach().cpu().item(),
-                "Reg Loss": sim_losses["Reg Loss"].detach().cpu().item()
+                "Total Loss": loss["Total Loss"].detach().cpu().item(),
+                "Data Loss": loss["Data Loss"],
+                "Reg Loss": loss["Reg Loss"]
             })
             self.best_setting["Pose"].update({
                 "Position": self.pose["Position"].detach().cpu(),
-                "Axis": self.pose["Axis"].detach().cpu(),
-                "Angle": self.pose["Angle"].detach().cpu(),
+                "Quaternion": self.pose["Quaternion"].detach().cpu(),
             })
 
             self.best_setting["Amp"] = amp.clone().detach().cpu()
             self.best_setting["Phase"] = phase.clone().detach().cpu()
             self.best_setting["RI Distribution"] = RI_distribution.clone().detach().cpu()
 
+
+    def frame_summary(self, frame_idx):
+        """Best Setting for Current Frame """
+        
+        self.logger.log_best_setting(frame_idx, self.best_setting, self.pose_unit)
+        self.logger.vis_best_setting(frame_idx, self.best_setting, self.gt_dataset, 
+                                     self.gt_transforms, self.propagator, self.sim_space.spatial_resolution, self.pose_unit)
+        print()
+        print("Best Setting:")
+        print(f"  Epoch: {self.best_setting['Epoch']}")
+        
+        print(f"  Loss: {round(self.best_setting["Loss"]['Total Loss'], 7)}")
+        print(f"  Data Loss: {round(self.best_setting["Loss"]['Data Loss'], 7)}")
+        print(f"  Reg Loss: {round(self.best_setting["Loss"]['Reg Loss'], 7)}")
+        
+        print(f"  Position: {reporting.print_values(self.best_setting["Pose"]['Position'], decimals=3)}")
+        axis_angle = quaternion.to_axis_angle(self.best_setting["Pose"]['Quaternion'])
+        axis, angle = quaternion.split_axis_angle(axis_angle)
+        angle = torch.rad2deg(angle)
+        print(f"  Axis: {reporting.print_values(axis, decimals=3)}")
+        print(f"  Angle: {reporting.print_values(angle, decimals=3)}")
+        
+        print()
 
 

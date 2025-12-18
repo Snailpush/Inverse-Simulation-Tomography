@@ -37,7 +37,7 @@
 		
 		
 		"start_frame": 0,
-		"end_frame": 2,
+		"end_frame": null,
 		"frame_steps": 1,
 		
 		
@@ -50,12 +50,13 @@
 		
 		"Initial":{
 			
-			"epochs": 10,
+			"epochs": 200,
 			
 			"optimizer":{
 				"Position": {"lr": 1e-1},
 				"Axis": {"lr": 5e-2},
-				"Angle": {"lr": 1e-1}
+				"Angle": {"lr": 1e-1},
+				"Quaternion": {"lr": 5e-2}
 			},
 			
 			"scheduler":{
@@ -70,12 +71,13 @@
 		
 		"Sequential": {
 
-			"epochs": 10,
+			"epochs": 200,
 			
 			"optimizer":{
 				"Position": {"lr": 5e-2},
 				"Axis": {"lr": 1e-2},
-				"Angle": {"lr": 5e-1}
+				"Angle": {"lr": 5e-1},
+				"Quaternion": {"lr": 5e-2}
 			},
 			
 			"scheduler":{
@@ -86,7 +88,8 @@
 			"regularizers" : {
 				"Position": {"var": "Position", "lambda": 0.5},
 				"Axis": {"var": "Axis", "lambda": 5, "w": [1e-5,1e-3,1e-3], "v": [1e-5,1e-3,1e-3]},
-				"Angle": {"var": "Angle", "lambda": 0.0075}
+				"Angle": {"var": "Angle", "lambda": 0.0075},
+				"Quaternion": {"var": "Quaternion", "lambda": 5, "w": [1e-5,1e-5,1e-3,1e-3], "v": [1e-5,1e-5,1e-3,1e-3]}
 			}
 			
 		}

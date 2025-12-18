@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 
-from Components.quaternion import Quaternion
+from Components import quaternion
 
 
 
@@ -51,8 +51,8 @@ def slerp_key_frames(max_time, rotations, device=None, dtype=torch.float64):
     """
     
     # converts list to to tensors in meters => [{axis:tensor(), theta:tensor(), time:...}, {axis:tensor(), theta:tensor(), time:...}, ]
-    rotations = movement_conversion(rotations, "axis", device=device, dtype=dtype)
-    rotations = movement_conversion(rotations, "theta", device=device, dtype=dtype)
+    rotations = movement_conversion(rotations, "axis", device=device, dtype=torch.float64)
+    rotations = movement_conversion(rotations, "theta", device=device, dtype=torch.float64)
     
     interpolated_rot = []
     
@@ -64,7 +64,9 @@ def slerp_key_frames(max_time, rotations, device=None, dtype=torch.float64):
         theta = rotations[0]["theta"].unsqueeze(0)
         
         # Create Quaternion from axis-angle
-        q = Quaternion.from_axis_angle(axis, theta, dtype=dtype, device=device)
+        #q = Quaternion.from_axis_angle(axis, theta, dtype=dtype, device=device)
+        axis_angle = axis * torch.deg2rad(theta).unsqueeze(-1)
+        q = quaternion.from_axis_angle(axis_angle)[0]
         
         # Repeat Quaternion for all timesteps
         interpolated_rot = [q] * max_time
@@ -94,7 +96,9 @@ def slerp_key_frames(max_time, rotations, device=None, dtype=torch.float64):
             theta = rotations[-1]["theta"].unsqueeze(0)
             
             # create quaternion
-            rot = Quaternion.from_axis_angle(axis, theta, dtype=dtype, device=device)
+            #rot = Quaternion.from_axis_angle(axis, theta, dtype=dtype, device=device)
+            axis_angle = axis * torch.deg2rad(theta).unsqueeze(-1)
+            rot = quaternion.from_axis_angle(axis_angle)[0]
 
         else:
             
@@ -102,17 +106,21 @@ def slerp_key_frames(max_time, rotations, device=None, dtype=torch.float64):
             prev_axis = rotations[prev_timestep_index]["axis"]
             prev_axis = F.normalize(prev_axis, dim=0)
             prev_theta = rotations[prev_timestep_index]["theta"].unsqueeze(0)
-            prev_q = Quaternion.from_axis_angle(prev_axis, prev_theta, dtype=dtype, device=device)
+            #prev_q = Quaternion.from_axis_angle(prev_axis, prev_theta, dtype=dtype, device=device)
+            axis_angle = prev_axis * torch.deg2rad(prev_theta).unsqueeze(-1)
+            prev_q = quaternion.from_axis_angle(axis_angle)[0]
             
             # upper bound axis-angle
             next_axis = rotations[next_timestep_index]["axis"]
             next_axis = F.normalize(next_axis, dim=0)
             next_theta = rotations[next_timestep_index]["theta"].unsqueeze(0)
-            next_q = Quaternion.from_axis_angle(next_axis, next_theta, dtype=dtype, device=device)
+            #next_q = Quaternion.from_axis_angle(next_axis, next_theta, dtype=dtype, device=device)
+            axis_angle = next_axis * torch.deg2rad(next_theta).unsqueeze(-1)
+            next_q = quaternion.from_axis_angle(axis_angle)[0]
             
             # SLERP
             alpha = (t-prev_timestep) / (next_timestep-prev_timestep)
-            q = prev_q.slerp(next_q, alpha)
+            q = quaternion.slerp(prev_q, next_q, alpha)
             rot = q
 
             # Check for next inertvall

@@ -15,14 +15,14 @@
 				"sqrt":{}
 			},
 			"phase": {
+				"gaussian_blur": {"sigma": 7.5},
 				"subtract_mean": {}
 				}
 		},
 		
 		"sim_transforms": {
 			"field": {
-				"crop": {"x_min":125, "y_min":125, "x_max":-125, "y_max":-125},
-				"upscale": {"target_shape":[500,500]}
+				"upscale_complex": {"target_shape":[500,500]}
 			},
 			"amp": {},
 			"phase": {
@@ -32,22 +32,21 @@
 	
 		
 		
-		"epochs": 5,
+		"epochs": 20,
+		
+		
+		"weights": [20, 75, 0.3, 300],
 
 		"optimizer": {
-			"Voxel Object": {"lr": 1e-3}
+			"Voxel Object": {"lr": 1e-4}
 		},
 		"scheduler": {
-			"milestones": [40,45],
-			"gamma": 0.5
+			"milestones": [15,18],
+			"gamma": 0.1
 		},
 		
-		
-		"loss_fn": "mse_ncc_loss",
-		"weights": [20, 50, 0.5, 150],
-		
 		"regularizers" : {
-			"TV Reg": {"lambda": 5e-5}
+			"TV Reg": {"lambda": 500}
 		}
 		
 	}

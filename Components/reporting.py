@@ -7,6 +7,7 @@ import json
 import copy
 import natsort
 import numpy as np
+import pandas as pd
 
 from skimage.restoration import unwrap_phase
 
@@ -14,6 +15,8 @@ from skimage.restoration import unwrap_phase
 from Components import utils
 from Components import visualization
 from Components import data_loader
+from Components import quaternion
+from Components.wavefield_processing import Transforms
 
 
 
@@ -26,12 +29,17 @@ from Components import data_loader
 
 
 class ForwardLogger():
-    """Logger for 'Forward Simulation.py'"""
+    """Logger for 'Forward Simulation.py
+    Output Options:
+        - amplitude: saves amplitude images
+        - phase: saves phase images
+        - slice: saves slice images of the simulation space
+        - sim_space: saves 3D renders of the simulation space
+        - file: saves .pt files with wavefield, amp, phase, pose, transforms, sim settings
+    """
     def __init__(self, logger_dict, phase_unwrap):
 
-
         self.root_dir = logger_dict["output_dir"]
-        #self.run_name = logger_dict["run_name"]
         
         self.options = logger_dict["options"]
 
@@ -47,11 +55,13 @@ class ForwardLogger():
         os.makedirs(self.data_dir, exist_ok=True)
         os.makedirs(self.image_dir, exist_ok=True)
         os.makedirs(self.video_dir, exist_ok=True)
+    
+    def __repr__(self):
+        ret = "-- Output Path --"
+        ret += f"\n Data/Images to: {self.output_dir}"
+        ret += f"\n Visualization Options: {self.options}\n"
+        return ret
 
-        print("-- Output Path --")
-        print(f" Data/Images to: {self.output_dir}")
-        print(f" Visualization Options: {self.options}")
-        print()
 
 
     def vis_step(self, timestep, amp, phase, RI_distribution, spatial_resolution, unit="um"):
@@ -115,7 +125,7 @@ class ForwardLogger():
 
             # Non-exposed settings
             axis = "z"
-            idx = 250
+            idx = 125
 
             # Slice
             # Currently set to the 250th slice along the z-axis by default
@@ -136,7 +146,7 @@ class ForwardLogger():
 
 
         # 3D Render
-        if "sim_space" in self.options:
+        if "sim_space" in self.options or "render" in self.options:
             
             # Sim space
             sim_space = RI_distribution.detach().cpu().numpy()
@@ -180,40 +190,58 @@ class ForwardLogger():
             src_folder = os.path.join(self.image_dir, "Slice")
             visualization.write_video(src_folder, self.video_dir, "Slice_vid.avi")
         
-        if "sim_space" in self.options:
+        if "sim_space" in self.options or "render" in self.options:
             src_folder = os.path.join(self.image_dir, "Sim Space")
             visualization.write_video(src_folder, self.video_dir, "Sim_Space_vid.avi")
         pass
 
     
 
-    def save(self, timestep, wavefield, amp, phase, pose_unit, position, offset, quaternion,
-         transforms, sim_unit, wave_length, grid_shape, spatial_resolution):
-        """Saves the current timestep data to a .pt file with the following informations:
-        
-        - wavefield: torch.complex64 tensor of shape (nx, ny) - complex wavefield at the detector plane
-        - amp: torch.float32 tensor of shape (nx, ny) - amplitude of the wavefield
-        - phase: torch.float32 tensor of shape (nx, ny) - phase of the wavefield
-        - unit: str - unit of the position and offset (e.g. "um")
-        - position: torch.float32 tensor of shape (3,) - position of the voxel object in the simulation space
-        - offset: torch.float32 tensor of shape (3,) - offset of the voxel object center from its geometric center
-        - axis: torch.float32 tensor of shape (3,) - rotation axis of the voxel object
-        - angle: float - rotation angle of the voxel object in degrees
-        - transforms: dict - post-processing transforms applied to the voxel object
-        - sim_unit: str - unit of the simulation space (e.g. "um")
-        - grid_shape: tuple of ints (nx, ny, nz) - shape of the simulation space grid
-        - spatial_resolution: tuple of floats (dx, dy, dz) - spatial resolution of the simulation space grid in sim_unit
-        - wavelength: float - wavelength of the incident wave in sim_unit
-
+    def save(self, timestep, wavefield, amp, phase, pose_unit, poses,
+         transforms, sim_unit, wavelength, grid_shape, spatial_resolution):
+        """Saves the current timestep data to a .pt file
+        Args:
+            timestep: int, current time step
+            wavefield: (H, W) tensor, output wavefield after propagation
+            amp: (H, W) tensor, amplitude of the output field after post processing
+            phase: (H, W) tensor, phase of the output field after post processing
+            pose_unit: str, unit of the poses (e.g., "um")
+            poses: dict, dictionary containing positions, offsets, rotations of all time steps
+            transforms: dict, dictionary containing the simulation space transforms
+            sim_unit: str, unit of the simulation space (e.g., "um")
+            wavelength: float, wavelength used in the propagator
+            grid_shape: tuple, shape of the simulation space grid
+            spatial_resolution: tuple, spatial resolution of the simulation space
+        Saves in .pt file:
+            - wavefield: (H, W) tensor, output wavefield after propagation + field post processing
+            - amp: (H, W) tensor, amplitude of the output field after amp post processing
+            - phase: (H, W) tensor, phase of the output field after phase post processing
+            - pose_unit: str, unit of the poses (e.g., "um")
+            - position: (3,) tensor, position of the center of the voxel object
+            - offset: (3,) tensor, translation offset of the voxel object
+            - axis: (3,) tensor, rotation axis of the voxel object
+            - angle: float, rotation angle (in degrees) of the voxel object
+            - transforms: dict, dictionary containing the post processing transforms
+            - sim_unit: str, unit of the simulation space (e.g., "um")
+            - grid_shape: tuple, shape of the simulation space grid
+            - spatial_resolution: tuple, spatial resolution of the simulation space
+            - wavelength: float, wavelength used in the propagator
         """
 
         if "file" in self.options:
         
             file_name = f"data_{timestep:03d}.pt"
-
             file_path = os.path.join(self.data_dir, file_name)
 
-            axis, angle = quaternion.to_axis_angle(dtype=torch.float64)
+
+            # Current Poses
+            position = poses["positions"][timestep]
+            offset = poses["offsets"][timestep]
+            quat = poses["rotations"][timestep]
+
+            axis_angle = quaternion.to_axis_angle(quat)
+            axis, theta = quaternion.split_axis_angle(axis_angle)
+            theta = torch.rad2deg(theta)
 
             data = {
                 "wavefield": wavefield,
@@ -223,12 +251,12 @@ class ForwardLogger():
                 "position": position,
                 "offset": offset,
                 "axis": axis,
-                "angle": angle,
+                "angle": theta,
                 "transforms": transforms,
                 "sim_unit": sim_unit,
                 "grid_shape": grid_shape,
                 "spatial_resolution": spatial_resolution,
-                "wavelength": wave_length                
+                "wavelength": wavelength                
             }
             
             # Save the updated file
@@ -257,21 +285,30 @@ class ForwardLogger():
 #
 ########################################################################
 
-
-
-def print_values(data, unit=1, decimals=3):
-    """Prints the data in the specified unit and rounds it to the specified number of decimals."""
-        
-    data_cpu = data.clone().cpu()
+def print_values(data, decimals=3):
+    """Clean printing of tensor values rounded to N decimals."""
+    if data.numel() == 1:
+        return round(float(data), decimals)
+    return utils.round_list(data.clone().cpu().tolist(), decimals=decimals)
     
-    if data_cpu.numel() == 1:
-        data_value = data_cpu.item()
-        data_value = round(data_value / unit, decimals)
-    else:
-        data_value = data_cpu / unit
-        data_value = data_value.tolist()
-        data_value = utils.round_list(data_value, decimals=decimals)    
-    return data_value
+
+
+# def print_values(data, unit=1, decimals=3):
+#     """Prints the data in the specified unit and rounds it to the specified number of decimals."""
+        
+#     data_cpu = data.clone().cpu()
+    
+#     if data_cpu.numel() == 1:
+#         data_value = data_cpu.item()
+#         data_value = round(data_value / unit, decimals)
+#     else:
+#         data_value = data_cpu / unit
+#         data_value = data_value.tolist()
+#         data_value = utils.round_list(data_value, decimals=decimals)    
+#     return data_value
+
+
+
         
 def print_loss_comp(loss_components, decimals=3, indent=0):
     """Prints individual Loss components in formated form"""
@@ -282,29 +319,29 @@ def print_loss_comp(loss_components, decimals=3, indent=0):
 
 
 
-def print_epoch_update(epoch, sim_losses, pose, 
+def print_epoch_update(epoch, loss, loss_components, pose, 
                        print_update=5, indent=5, verbose=False):
     """Prints formated Results (Loss/Pose) of the current epoch"""
     # print progress
     if epoch % print_update == 0:
 
-        loss = sim_losses["Total Loss"].detach().cpu().item()
-        loss_components = sim_losses["Components"]
+        total_loss = loss["Total Loss"].detach().cpu().item()
 
         pos = pose["Position"] 
-        axis = pose["Axis"]
-        theta = pose["Angle"]
-
+        quat = pose["Quaternion"]
+        axis_angle = quaternion.to_axis_angle(quat)
+        axis, theta = quaternion.split_axis_angle(axis_angle)
+        theta = torch.rad2deg(theta)
 
         print(f"{' '*indent}----{epoch}----")
         print(f"{' '*indent}Time: {time.strftime('%H:%M:%S')}")
 
-        print(f"{' '*indent}  Position: {print_values(pos)}")
-        print(f"{' '*indent}  Axis: {print_values(axis)}")
-        print(f"{' '*indent}  Angle: {print_values(theta)}")
+        print(f"{' '*indent}  Position: {print_values(pos, decimals=3)}")
+        print(f"{' '*indent}  Axis: {print_values(axis, decimals=3)}")
+        print(f"{' '*indent}  Angle: {print_values(theta, decimals=3)}")
         print()
 
-        print(f"{' '*indent}Total Loss: {loss}")
+        print(f"{' '*indent}Total Loss: {total_loss:.6f}")
         if verbose:
             print(f"{' '*indent}Loss Components: {print_loss_comp(loss_components, 
                                                                   decimals=6, indent=indent)}")
@@ -330,7 +367,6 @@ class PoseOptLogger():
     def __init__(self, logger_dict, unwrap):
 
         self.output_dir = logger_dict["output_dir"]
-        #self.run_name = logger_dict["run_name"] 
 
         # Root Output Dir 
         #self.out_path = os.path.join(self.output_dir, self.run_name)
@@ -354,21 +390,14 @@ class PoseOptLogger():
         # Flag for phase unwrapping
         self.unwrap = unwrap
 
-        # Flag for wandb logging
-        self.wandb = logger_dict.get("wandb", False)
-        if self.wandb:
-            self.run_name = os.path.basename(os.path.normpath(self.output_dir))
-            wandb.login()
-        
-            
-        
+    def __repr__(self):
 
+        ret = "-- Output Path --"
+        ret += f"{self.out_path}\n"
+        ret += f"{self.options}\n"
 
-        print("-- Output Path --")
-        print(self.out_path)
-        print()
-
-        pass
+        return ret
+   
 
 
     def save_configs(self, configs):
@@ -385,155 +414,131 @@ class PoseOptLogger():
 
     def new_frame(self, frame_idx):
         """Initialize logging for a new frame"""
+
+        # Create Directory for the current frame
         self.frame_idx = frame_idx
         self.frame_path = os.path.join(self.frames_path, f"Frame_{frame_idx:03d}")
         os.makedirs(self.frame_path, exist_ok=True)
 
+
+        # Initialize lists to store losses for visualization
         self.total_losses = []
         self.data_losses = []
         self.reg_losses = []
+        self.mse_amp_losses = []
+        self.mse_phase_losses = []
+        self.ncc_amp_losses = []
+        self.ncc_phase_losses = []
+        self.pos_reg_losses = []
+        self.quat_reg_losses = []
 
-       
-
-        if(self.wandb):
-            wandb.finish()
-            self.wandb_run = wandb.init(project=self.run_name,
-                                        name=f"Frame {frame_idx:03d}", 
-                                        settings=wandb.Settings(silent="true")
-                                        )
-            self.wandb_positions = {"Px":[], "Py":[], "Pz":[]}
-            self.wandb_axes = {"Ax":[], "Ay":[], "Az":[]}
-            self.wandb_angles = {"Angle":[]}
 
         pass
 
     ### Per epoch logging and visualization ###
 
-    def log_progress(self, epoch, sim_losses, pose):
-        """Log current epoch (Loss/Pose)"""
+    def log_progress(self, epoch, loss, loss_components, pose):
+        """"""
 
-        # losses
-        loss = sim_losses["Total Loss"]
-        data_loss = sim_losses["Data Loss"]
-        reg_loss = sim_losses["Reg Loss"]
-        loss_components = sim_losses["Components"]
+        # Pose Logging - Save Position and Quaternion to CSV files
+        pos = pose["Position"].detach().tolist() 
+        q = pose["Quaternion"].detach().tolist() 
+
+        position_file = os.path.join(self.frame_path, f"Position.csv")
+
+        columns = ["pos_x", "pos_y", "pos_z"]
+        df_r = pd.DataFrame([pos], columns=columns, index=[epoch])
+        df_r.to_csv(position_file, mode='a', index=True, header=not os.path.exists(position_file))
+
+        # Save Quaternions
+        quaternion_file = os.path.join(self.frame_path, f"Rotation.csv")
+        columns = ["q_w", "q_x", "q_y", "q_z"]
+        df_q = pd.DataFrame([q], columns=columns, index=[epoch])
+        df_q.to_csv(quaternion_file, mode='a', index=True, header=not os.path.exists(quaternion_file))
+
+
+        # Log current epoch (Loss/Pose)
+        total_loss = loss["Total Loss"].item()
+        data_loss = loss["Data Loss"]
+        reg_loss = loss["Reg Loss"]
+
+        mse_amp_loss = loss_components.get("MSE Amp Loss", None)
+        mse_phase_loss = loss_components.get("MSE Phase Loss", None)
+        ncc_amp_loss = loss_components.get("NCC Amp Loss", None)
+        ncc_phase_loss = loss_components.get("NCC Phase Loss", None)
+        pos_reg_loss = loss_components.get("Position Reg Loss", None)
+        quat_reg_loss = loss_components.get("Quaternion Reg Loss", None)
 
 
         # save loss of current epoch for visualization
-        self.total_losses.append(loss.item())
-        self.data_losses.append(data_loss.item())
-        self.reg_losses.append(reg_loss.item())
+        self.total_losses.append(total_loss)
+        self.data_losses.append(data_loss)
+        self.reg_losses.append(reg_loss)
 
-        # Collect Values of current epoch
-        values = {}
-        values["Loss"] = loss.item()
-        values["Data Loss"] = data_loss.item()
-        values["Reg Loss"] = reg_loss.item()
+        self.mse_amp_losses.append(mse_amp_loss)
+        self.mse_phase_losses.append(mse_phase_loss)
+        self.ncc_amp_losses.append(ncc_amp_loss)
+        self.ncc_phase_losses.append(ncc_phase_loss)
+        self.pos_reg_losses.append(pos_reg_loss)
+        self.quat_reg_losses.append(quat_reg_loss)
 
-        values.update(loss_components)
-        
-        # Set Pose representation
-        values["Position"] = pose["Position"].tolist() 
-        values["Axis"] = pose["Axis"].tolist() 
-        values["Theta"] = pose["Angle"].item() 
+        loss_file = os.path.join(self.frame_path, f"Losses.csv")
+        columns = ["Total Loss", "Data Loss", "Reg Loss", 
+                   "MSE Amp Loss", "MSE Phase Loss", "NCC Amp Loss", "NCC Phase Loss", 
+                   "Pos Reg Loss", "Quat Reg Loss"]
+        df_loss = pd.DataFrame([[total_loss, data_loss, reg_loss, 
+                                 mse_amp_loss, mse_phase_loss, ncc_amp_loss, ncc_phase_loss, 
+                                 pos_reg_loss, quat_reg_loss]], 
+                               columns=columns, index=[epoch])
+        df_loss.to_csv(loss_file, mode='a', index=True, header=not os.path.exists(loss_file))
 
 
-
-        # Write current Progress to file
-        progress_path = os.path.join(self.frame_path, "progress.json")
-
-        # Initialize with empty dict if file doesn't exist
-        if not os.path.exists(progress_path):
-            with open(progress_path, 'w') as f:
-                json.dump({}, f)
-
-        # Load existing dictionary
-        with open(progress_path, 'r') as f:
-            data = json.load(f)
-
-        # Add/overwrite entry
-        data[f"Epoch {epoch}"] = values
-
-        # Save updated dictionary
-        with open(progress_path, 'w') as f:
-            json.dump(data, f, indent=2)
-    
-    
-        if self.wandb:
-            
-            wandb_values = {
-                "Total Loss": loss.item(),
-                "Data Loss": data_loss.item(),
-                "Reg Loss": reg_loss.item(),
-                "Px": pose["Position"][0].item(),
-                "Py": pose["Position"][1].item(),
-                "Pz": pose["Position"][2].item(),
-                "Ax": pose["Axis"][0].item(),
-                "Ay": pose["Axis"][1].item(),
-                "Az": pose["Axis"][2].item(),
-                "Theta": pose["Angle"].item()
-            }
-
-            wandb.log(wandb_values)
-
-            self.wandb_positions["Px"].append(pose["Position"][0].item())
-            self.wandb_positions["Py"].append(pose["Position"][1].item())
-            self.wandb_positions["Pz"].append(pose["Position"][2].item())
-            self.wandb_axes["Ax"].append(pose["Axis"][0].item())
-            self.wandb_axes["Ay"].append(pose["Axis"][1].item())
-            self.wandb_axes["Az"].append(pose["Axis"][2].item())
-            self.wandb_angles["Angle"].append(pose["Angle"].item())
-    
-        pass
 
 
 
     def vis_progress(self, epoch, amp, phase, gt_amp, gt_phase, spatial_resolution, 
-                     pose, gt_pose, pose_unit, vis_updates=10):
+                     pose, pose_unit, vis_updates=10):
         """Visualizations every couple epochs"""
 
         # Show visualization every few epochs
         if epoch % vis_updates != 0:
             return
 
+        pos = pose["Position"].detach().cpu()
+        quat = pose["Quaternion"].detach().cpu()
+        axis_angle = quaternion.to_axis_angle(quat)
+        axis, angle = quaternion.split_axis_angle(axis_angle)
+        angle = torch.rad2deg(angle)
 
          # Plot Total/Data/Reg Loss 
         if "losses" in self.options:
 
-            loss_path = os.path.join(self.frame_path, "loss")
-            os.makedirs(loss_path, exist_ok=True)
+
+            #fig, ax = visualization.loss_plot(self.total_losses, self.data_losses, self.reg_losses)
+            fig, ax = visualization.extendet_loss_plot(self.total_losses, self.data_losses, self.reg_losses,
+                                                      self.mse_amp_losses, self.mse_phase_losses,
+                                                      self.ncc_amp_losses, self.ncc_phase_losses,
+                                                      self.pos_reg_losses, self.quat_reg_losses)
+            visualization.save_plot(fig, self.frame_path, "Frame Loss.png")
         
-            # Total Loss
-            title =  f"Total Loss @ {epoch}"
-            fig = visualization.plot_loss(self.total_losses, title, log_scale=False)            
-            visualization.save_plot(fig, loss_path, "Total Loss.png")
-
-
-            # Data Loss
-            title =  f"Data Loss @ {epoch}"
-            fig = visualization.plot_loss(self.data_losses, title, log_scale=False)
-            visualization.save_plot(fig, loss_path, "Data Loss.png")
-
-            # Reg Loss
-            title =  f"Reg Loss @ {epoch}"
-            fig = visualization.plot_loss(self.reg_losses, title, log_scale=False)
-            visualization.save_plot(fig, loss_path, "Reg Loss.png")
 
 
         # Plot Amp Comparison for current epoch
         if "amps" in self.options:
-            
-            amp = amp.detach().cpu().numpy()
-            gt_amp = gt_amp.detach().cpu().numpy()
 
             amp_path = os.path.join(self.frame_path, "amp")
             os.makedirs(amp_path, exist_ok=True)
 
+            
+            amp = amp.detach().cpu().numpy()
+            gt_amp = gt_amp.detach().cpu().numpy()
+
             spatial_support = [spatial_resolution[i]*amp.shape[i] for i in range(2)]
 
             title = "Current Amp \n"
+            title = visualization.pose_title(title, pos, axis, angle)
             gt_title = "Target Amp\n"
-            title, gt_title = visualization.get_titles(title, gt_title, pose, gt_pose, pose_unit)
+            
             axis_labels = {"x-axis": f"Y ({pose_unit})", "y-axis": f"X ({pose_unit})"}
             
             fig, ax = visualization.comparison_plot([amp, gt_amp], spatial_support, [title, gt_title], axis_labels, cmap="gray", grid=True)
@@ -545,6 +550,9 @@ class PoseOptLogger():
         # Plot Phase Comparison for current epoch
         if "phases" in self.options:
 
+            phase_path = os.path.join(self.frame_path, "phase")
+            os.makedirs(phase_path, exist_ok=True)
+
             phase = phase.detach().cpu().numpy()
             gt_phase = gt_phase.detach().cpu().numpy()
 
@@ -552,15 +560,13 @@ class PoseOptLogger():
                 phase = unwrap_phase(phase)
                 gt_phase = unwrap_phase(gt_phase)
             
-            phase_path = os.path.join(self.frame_path, "phase")
-            os.makedirs(phase_path, exist_ok=True)
 
             spatial_support = [spatial_resolution[i]*phase.shape[i] for i in range(2)]
 
             title = "Current Phase\n"
+            title = visualization.pose_title(title, pos, axis, angle)
             gt_title = "Target Phase\n"
 
-            title, gt_title = visualization.get_titles(title, gt_title, pose, gt_pose, pose_unit)
             
             axis_labels = {"x-axis": f"Y ({pose_unit})", "y-axis": f"X ({pose_unit})"}
             fig, ax = visualization.comparison_plot([phase, gt_phase], spatial_support, [title, gt_title], axis_labels, cmap="gray", grid=True)
@@ -578,8 +584,7 @@ class PoseOptLogger():
         epoch = best_setting["Epoch"]
 
         position = (best_setting["Pose"]["Position"]).detach().cpu().tolist()
-        axis = best_setting["Pose"]["Axis"].detach().cpu().tolist()
-        angle = best_setting["Pose"]["Angle"].detach().cpu().item()
+        quat = best_setting["Pose"]["Quaternion"].detach().cpu().tolist()
 
         pose_dict={
             "Epoch": epoch,
@@ -588,8 +593,9 @@ class PoseOptLogger():
             "Reg Loss": best_setting["Loss"]["Reg Loss"],
             "unit": pose_unit,
             "Position": position,
-            "Axis": axis,
-            "Theta": angle,
+            #"Axis": axis,
+            #"Theta": angle,
+            "Quaternion": quat
         }
         
         best_setting_path = os.path.join(self.summary_path, "best_settings.json")
@@ -611,72 +617,45 @@ class PoseOptLogger():
         with open(best_setting_path, 'w') as f:
             json.dump(data, f, indent=2)
 
-        if(self.wandb):
-            
-            wandb.log({
-                "Position": wandb.plot.line_series(
-                    xs=list(range(len(self.wandb_positions["Px"]))),
-                    ys=[
-                        list(self.wandb_positions["Px"]),
-                        list(self.wandb_positions["Py"]),
-                        list(self.wandb_positions["Pz"])
-                    ],
-                    keys=["Px", "Py", "Pz"],
-                    title="Position",
-                    split_table=True
-                ),
-                "Axis": wandb.plot.line_series(
-                    xs=list(range(len(self.wandb_axes["Ax"]))),
-                    ys=[
-                        list(self.wandb_axes["Ax"]),
-                        list(self.wandb_axes["Ay"]),
-                        list(self.wandb_axes["Az"])
-                    ],
-                    keys=["Ax", "Ay", "Az"],
-                    title="Axis",split_table=True
-                ),
-                "Angle": wandb.plot.line_series(
-                    xs=list(range(len(self.wandb_angles["Angle"]))),
-                    ys=[list(self.wandb_angles["Angle"])],
-                    keys=["Angle"],
-                    title="Angle",split_table=True
-                )
-            })
+       
         pass
 
 
-    def vis_best_setting(self, best_setting, gt_amp, gt_phase, spatial_resolution, pose_unit):
+    def vis_best_setting(self, frame_idx, best_setting, gt_dataset, gt_transforms, propagator, spatial_resolution, pose_unit):
         """Visualizes the best setting of the current frame"""
 
         position = (best_setting["Pose"]["Position"]).detach().cpu()
-        axis = best_setting["Pose"]["Axis"].detach().cpu()
-        angle = best_setting["Pose"]["Angle"].detach().cpu()
+        quat = best_setting["Pose"]["Quaternion"].detach().cpu()
+        axis_angle = quaternion.to_axis_angle(quat)
+        axis, angle = quaternion.split_axis_angle(axis_angle)
+        angle = torch.rad2deg(angle)
 
-        log_pose = {
-            "Position": position, 
-            "Axis": axis, 
-            "Angle": angle
-            }
-
-        
 
         amp = best_setting["Amp"]
         phase = best_setting["Phase"]
+
+        frame = gt_dataset[frame_idx] 
+        _, gt_amp, gt_phase = frame.get_ground_truth(propagator, gt_transforms)
+        _, raw_amp, raw_phase = frame.get_ground_truth(propagator, Transforms({"field": {}, "amp": {}, "phase": {}}))
 
         if "amps" in self.options:
             
             amp = amp.detach().cpu().numpy()
             gt_amp = gt_amp.detach().cpu().numpy()
+            raw_amp = raw_amp.detach().cpu().numpy()
 
 
             spatial_support = [spatial_resolution[i]*amp.shape[i] for i in range(2)]
 
-            title = "Current Amp \n"
+            title = visualization.pose_title("Current Amp \n", position, axis, angle)
             gt_title = "Target Amp\n"
-            title, gt_title = visualization.get_titles(title, gt_title, log_pose, None, pose_unit)
+            raw_gt_title = "Raw GT Amp\n"
+
             axis_labels = {"x-axis": f"Y ({pose_unit})", "y-axis": f"X ({pose_unit})"}
             
-            fig, ax = visualization.comparison_plot([amp, gt_amp], spatial_support, [title, gt_title], axis_labels, cmap="gray", grid=True)
+            fig, ax = visualization.comparison_plot([amp, gt_amp, raw_amp], spatial_support, 
+                                                    [title, gt_title, raw_gt_title], axis_labels, cmap="gray", grid=True)
+            
             fig.suptitle(f"Best Setting - Amplitude")
             
             visualization.save_plot(fig, self.frame_path, f"Best Amplitude.png")
@@ -686,21 +665,24 @@ class PoseOptLogger():
 
             phase = phase.detach().cpu().numpy()
             gt_phase = gt_phase.detach().cpu().numpy()
+            raw_gt_phase = raw_phase.detach().cpu().numpy()
 
             if self.unwrap:
                 phase = unwrap_phase(phase)
                 gt_phase = unwrap_phase(gt_phase)
+                raw_gt_phase = unwrap_phase(raw_gt_phase)
             
-
 
             spatial_support = [spatial_resolution[i]*phase.shape[i] for i in range(2)]
 
-            title = "Current Phase\n"
+            title = visualization.pose_title("Current Phase\n", position, axis, angle)
             gt_title = "Target Phase\n"
-            title, gt_title = visualization.get_titles(title, gt_title, log_pose, None, pose_unit)
+            raww_gt_title = "Raw GT Phase\n"
+
             axis_labels = {"x-axis": f"Y ({pose_unit})", "y-axis": f"X ({pose_unit})"}
             
-            fig, ax = visualization.comparison_plot([phase, gt_phase], spatial_support, [title, gt_title], axis_labels, cmap="gray", grid=True)
+            fig, ax = visualization.comparison_plot([phase, gt_phase, raw_gt_phase], spatial_support, 
+                                                    [title, gt_title, raww_gt_title], axis_labels, cmap="gray", grid=True)
             fig.suptitle(f"Best Setting - Phase")
             
             visualization.save_plot(fig, self.frame_path, f"Best Phase.png")
@@ -764,39 +746,59 @@ class PoseOptLogger():
         # Collect best poses
         frames = []
         positions = []
+        quaternions = []
         axes = []
         thetas = []
         best_epochs = []
 
         total_losses = []
+        data_losses = []
+        reg_losses = []
 
         for frame in best_poses:
             frame_idx = int(frame.split(" ")[1])
             position = np.array(best_poses[frame]["Position"])
-            axis = np.array(best_poses[frame]["Axis"])
-            theta = np.array(best_poses[frame]["Theta"])
+            quat = torch.tensor(best_poses[frame]["Quaternion"]) # quaternion operations use torch tensors
+            axis_angle = quaternion.to_axis_angle(quat)
+            axis, theta = quaternion.split_axis_angle(axis_angle)
+            theta = torch.rad2deg(theta)
+            
+            #axis = np.array(best_poses[frame]["Axis"])
+            #theta = np.array(best_poses[frame]["Theta"])
             best_epoch = best_poses[frame]["Epoch"]
             total_loss = best_poses[frame]["Total Loss"]
+            data_loss = best_poses[frame]["Data Loss"] 
+            reg_loss = best_poses[frame]["Reg Loss"]               
 
             frames.append(frame_idx)
             positions.append(position)
+            quaternions.append(quat)
             axes.append(axis)
             thetas.append(theta)
             best_epochs.append(best_epoch)
             total_losses.append(total_loss)
+            data_losses.append(data_loss)
+            reg_losses.append(reg_loss)
 
         frames = np.array(frames)
         positions = np.array(positions)
+        quaternions = np.array(quaternions)
         axes = np.array(axes)
         thetas = np.array(thetas)
         best_epochs = np.array(best_epochs)
         total_losses = np.array(total_losses)
+        data_losses = np.array(data_losses)
+        reg_losses = np.array(reg_losses)
         
         # Plots
 
         # Position
         fig, ax = visualization.rgb_plot(frames, positions, "Best Positions", ("Frames", "Positions in um"))
         fig.savefig(os.path.join(self.summary_path, "best_positions.png"))
+
+        # Quaternions
+        fig, ax = visualization.quaternion_plot(frames, quaternions, "Best Quaternions", ("Frames", ["qw", "qx", "qy", "qz"]))
+        fig.savefig(os.path.join(self.summary_path, "best_quaternions.png"))
 
         # Axis
         fig, ax = visualization.rgb_plot(frames, axes, "Best Axes", ("Frames", "Axes"))
@@ -817,7 +819,8 @@ class PoseOptLogger():
 
 
         # Best Losses
-        fig = visualization.plot_loss(total_losses, "Best Losses", log_scale=False)
+        #fig = visualization.plot_loss(total_losses, "Best Losses", log_scale=False)
+        fig, ax = visualization.loss_plot(total_losses, data_losses, reg_losses)
         fig.savefig(os.path.join(self.summary_path, "Losses.png"))
 
         plt.close("all")
@@ -865,16 +868,11 @@ class ReconOptLogger:
     def __init__(self, logger_dict, unwrap):
 
         self.output_dir = logger_dict["output_dir"]
-        #self.run_name = logger_dict["run_name"] 
 
         # Root Output Dir 
-        #self.out_path = os.path.join(self.output_dir, self.run_name)
         self.out_path = self.output_dir
         os.makedirs(self.out_path, exist_ok=True)
 
-        print("-- Output Path --")
-        print(self.out_path)
-        print()
 
         # Configs Output Dir
         self.configs_path = os.path.join(self.out_path, "Configs")
@@ -884,8 +882,6 @@ class ReconOptLogger:
         self.summary_path = os.path.join(self.out_path, "Summary")
         os.makedirs(self.summary_path, exist_ok=True)
 
-        self.loss_path = os.path.join(self.summary_path, "Losses")
-        os.makedirs(self.loss_path, exist_ok=True)
 
         self.amp_path = os.path.join(self.summary_path, "Amps")
         os.makedirs(self.amp_path, exist_ok=True)
@@ -903,21 +899,18 @@ class ReconOptLogger:
         # Flag for phase unwrapping
         self.unwrap = unwrap
 
-        # Flag for wandb logging
-        self.wandb = logger_dict.get("wandb", False)
-        if self.wandb:
-            self.run_name = os.path.basename(os.path.normpath(self.output_dir))
-            wandb.login()
-            self.wandb_run = wandb.init(project=self.run_name,
-                                        name=self.run_name, 
-                                        settings=wandb.Settings(silent="true")
-                                        )
-
 
         self.total_losses = []
         self.data_losses = []
         self.reg_losses = []
         
+    def __repr__(self):
+
+        ret = "-- Output Path --"
+        ret += f"{self.out_path}\n"
+        ret += f"{self.options}\n"
+
+        return ret
 
 
     def save_configs(self, configs):
@@ -935,27 +928,14 @@ class ReconOptLogger:
         if isinstance(epoch, int):
             epoch = f"{epoch:03d}"
 
+
+        self.epoch = epoch
+
         self.epoch_path = os.path.join(self.epochs_path, f"Epoch_{epoch}")
         os.makedirs(self.epoch_path, exist_ok=True)
 
 
-    def track_loss_across_epochs(self, loss):
-        
-        self.total_losses.append(loss["Total Loss"])
-        self.data_losses.append(loss["Data Loss"])
-        self.reg_losses.append(loss["Reg Loss"])
-
-        if self.wandb:
-            wandb_values = {
-                "Total Loss": loss["Total Loss"],
-                "Data Loss": loss["Data Loss"],
-                "Reg Loss": loss["Reg Loss"]
-            }
-            wandb.log(wandb_values)
-
-
-
-    def print_loss(self, loss, verbose=True):
+    def print_loss(self, loss, loss_components, verbose=True):
 
         print("Average Loss over Dataset:")
 
@@ -965,9 +945,16 @@ class ReconOptLogger:
         
         if verbose:
             print("  Loss Components:")
-            for name, value in loss['Components'].items():
+            for name, value in loss_components.items():
                 print(f"   {name}: {round(value, 6)}")
 
+    def track_loss_across_epochs(self, loss):
+        
+        self.total_losses.append(loss["Total Loss"])
+        self.data_losses.append(loss["Data Loss"])
+        self.reg_losses.append(loss["Reg Loss"])
+
+        # Maybe extend to individual loss components later
 
 
     #### Per Epoch Logging ####
@@ -1039,42 +1026,32 @@ class ReconOptLogger:
 
         pass
 
-    
-        
-    def vis_wavefield(self, idx, voxel_object, amp, phase, gt_amp, gt_phase, pose, out="epoch"):
-        """Visualize Wavefield for current epoch (Amp and Phase)"""
+    def vis_last_wavefield(self, voxel_object, amp, phase, gt_amp, gt_phase, pose):
+        """Visualize Amp/Phase of the last frame/pose in the dataset"""
 
-        if out == "epoch":
-            amp_path, phase_path = self.epoch_path, self.epoch_path
-            name = "Epoch"
-        elif out == "summary":
-            amp_path = self.amp_path
-            phase_path = self.phase_path
-            name = "Frame"
-
-
-        if isinstance(idx, int):
-            idx = f"_{idx:03d}"
-
+        pose_unit = pose["unit"]
+        position = pose["Position"].detach().cpu()
+        quat = pose["Quaternion"].detach().cpu()
+        axis_angle = quaternion.to_axis_angle(quat)
+        axis, angle = quaternion.split_axis_angle(axis_angle)
+        angle = torch.rad2deg(angle)
 
         if "amps" in self.options:
             amp = amp.detach().cpu().numpy()
             gt_amp = gt_amp.detach().cpu().numpy()
 
             spatial_resolution = voxel_object.spatial_resolution.detach().cpu().numpy()
-            pose_unit = pose["unit"]
-
             spatial_support = [spatial_resolution[i]*amp.shape[i] for i in range(2)]
 
-            title = "Simulation Amp \n"
+            title = visualization.pose_title("Simulation Amp\n", position, axis, angle)
             gt_title = "Target Amp\n"
-            title, gt_title = visualization.get_titles(title, gt_title, pose, None, pose_unit)
             axis_labels = {"x-axis": f"Y ({pose_unit})", "y-axis": f"X ({pose_unit})"}
             
-            fig, ax = visualization.comparison_plot([amp, gt_amp], spatial_support, [title, gt_title], axis_labels, cmap="gray", grid=True)
-            fig.suptitle(f"{name}{idx}")
+            fig, ax = visualization.comparison_plot([amp, gt_amp], spatial_support, [title, gt_title], 
+                                                    axis_labels, cmap="gray", grid=True)
+            fig.suptitle(f"Epoch {self.epoch}")
             
-            visualization.save_plot(fig, amp_path, f"Amplitude{idx}.png")
+            visualization.save_plot(fig, self.epoch_path, f"Amplitude_{self.epoch}.png")
 
         if "phases" in self.options:
             phase = phase.detach().cpu().numpy()
@@ -1085,23 +1062,21 @@ class ReconOptLogger:
                 gt_phase = unwrap_phase(gt_phase)
             
             spatial_resolution = voxel_object.spatial_resolution.detach().cpu().numpy()
-            pose_unit = pose["unit"]
-
             spatial_support = [spatial_resolution[i]*phase.shape[i] for i in range(2)]
 
-            title = "Simulation Phase\n"
+            title = visualization.pose_title("Simulation Phase\n", position, axis, angle)
             gt_title = "Target Phase\n"
-
-            title, gt_title = visualization.get_titles(title, gt_title, pose, None, pose_unit)
-            
             axis_labels = {"x-axis": f"Y ({pose_unit})", "y-axis": f"X ({pose_unit})"}
-            fig, ax = visualization.comparison_plot([phase, gt_phase], spatial_support, [title, gt_title], axis_labels, cmap="gray", grid=True)
-            fig.suptitle(f"{name}{idx}")
+
+            fig, ax = visualization.comparison_plot([phase, gt_phase], spatial_support, [title, gt_title],
+                                                     axis_labels, cmap="gray", grid=True)
+            fig.suptitle(f"Epoch {self.epoch}")
             
-            visualization.save_plot(fig, phase_path, f"Phase{idx}.png")
+            visualization.save_plot(fig, self.epoch_path, f"Phase_{self.epoch}.png")
 
         pass
-
+    
+        
 
 
 
@@ -1109,24 +1084,8 @@ class ReconOptLogger:
     def vis_losses(self):
         """Plot Losses over all epochs"""
 
-        # Total Loss
-        title =  f"Total Loss over Epochs"
-        fig = visualization.plot_loss(self.total_losses, title, log_scale=False)            
-        visualization.save_plot(fig, self.loss_path, "Total Loss.png")
-
-
-        # Data Loss
-        title =  f"Data Loss over Epochs"
-        fig = visualization.plot_loss(self.data_losses, title, log_scale=False)
-        visualization.save_plot(fig, self.loss_path, "Data Loss.png")
-
-        # Reg Loss
-        title =  f"Reg Loss over Epochs"
-        fig = visualization.plot_loss(self.reg_losses, title, log_scale=False)
-        visualization.save_plot(fig, self.loss_path, "Reg Loss.png")
-
-        if self.wandb:
-             wandb.finish()
+        fig, ax = visualization.loss_plot(self.total_losses, self.data_losses, self.reg_losses)
+        visualization.save_plot(fig, self.summary_path, "Losses.png")
         pass
 
 
@@ -1176,9 +1135,15 @@ class ReconOptLogger:
         phase_path = self.phase_path
         name = "Frame"
 
-
         if isinstance(idx, int):
             idx = f"_{idx:03d}"
+
+        pose_unit = pose["unit"]
+        position = pose["Position"].detach().cpu()
+        quat = pose["Quaternion"].detach().cpu()
+        axis_angle = quaternion.to_axis_angle(quat)
+        axis, angle = quaternion.split_axis_angle(axis_angle)
+        angle = torch.rad2deg(angle)
 
 
         if "amps" in self.options:
@@ -1187,18 +1152,15 @@ class ReconOptLogger:
             raw_gt_amp = raw_gt_amp.detach().cpu().numpy()
 
             spatial_resolution = voxel_object.spatial_resolution.detach().cpu().numpy()
-            pose_unit = pose["unit"]
-
             spatial_support = [spatial_resolution[i]*amp.shape[i] for i in range(2)]
 
-            title = "Simulation Amp \n"
+            title = visualization.pose_title("Simulation Amp \n", position, axis, angle)
             gt_title = "Target Amp\n"
             raw_gt_title = "Raw GT Amp\n"
-
-            title, gt_title = visualization.get_titles(title, gt_title, pose, None, pose_unit)
             axis_labels = {"x-axis": f"Y ({pose_unit})", "y-axis": f"X ({pose_unit})"}
             
-            fig, ax = visualization.comparison_plot([amp, gt_amp, raw_gt_amp], spatial_support, [title, gt_title, raw_gt_title], axis_labels, cmap="gray", grid=True)
+            fig, ax = visualization.comparison_plot([amp, gt_amp, raw_gt_amp], spatial_support, [title, gt_title, raw_gt_title],
+                                                     axis_labels, cmap="gray", grid=True)
             fig.suptitle(f"{name}{idx}")
             
             visualization.save_plot(fig, amp_path, f"Amplitude{idx}.png")
@@ -1213,18 +1175,16 @@ class ReconOptLogger:
                 gt_phase = unwrap_phase(gt_phase)
             
             spatial_resolution = voxel_object.spatial_resolution.detach().cpu().numpy()
-            pose_unit = pose["unit"]
-
             spatial_support = [spatial_resolution[i]*phase.shape[i] for i in range(2)]
 
-            title = "Simulation Phase\n"
+            title = visualization.pose_title("Simulation Phase\n", position, axis, angle)
             gt_title = "Target Phase\n"
             raw_gt_title = "Raw GT Phase\n"
-
-            title, gt_title = visualization.get_titles(title, gt_title, pose, None, pose_unit)
             
             axis_labels = {"x-axis": f"Y ({pose_unit})", "y-axis": f"X ({pose_unit})"}
-            fig, ax = visualization.comparison_plot([phase, gt_phase, raw_gt_phase], spatial_support, [title, gt_title, raw_gt_title], axis_labels, cmap="gray", grid=True)
+            
+            fig, ax = visualization.comparison_plot([phase, gt_phase, raw_gt_phase], spatial_support, [title, gt_title, raw_gt_title],
+                                                     axis_labels, cmap="gray", grid=True)
             fig.suptitle(f"{name}{idx}")
             
             visualization.save_plot(fig, phase_path, f"Phase{idx}.png")

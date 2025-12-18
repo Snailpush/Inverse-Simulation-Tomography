@@ -3,12 +3,9 @@
 		"unit": "um",
 		"wavelength": 0.640,
 		"spatial_resolution": [0.1, 0.1, 0.1],
-		"grid_shape": [500, 500, 500],
+		"grid_shape": [250, 250, 250],
 		"n_background": 1.334,
-		"sim_mask": {
-			"type": "sphere",
-			"size": 110
-		},
-		"backpropagation_distance": 26
+		"sim_mask": {},
+		"backpropagation_distance": 12.5
 	}
 }

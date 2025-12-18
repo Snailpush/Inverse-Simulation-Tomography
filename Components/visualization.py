@@ -101,30 +101,40 @@ def get_extent(support, axis="z", origin="top-left"):
     return extent
 
 
-def get_titles(title, gt_title, pose, gt_pose, pose_unit="um"): 
-    """Helper function to format titles with pose information
-    Used in comparison plots"""
+# def get_titles(title, gt_title, pose, gt_pose, pose_unit="um"): 
+#     """Helper function to format titles with pose information
+#     Used in comparison plots"""
 
-    position = utils.round_list((pose["Position"]).detach().cpu().tolist(), 3)
-    axis = utils.round_list(pose["Axis"].detach().cpu().tolist(), 3)
-    angle = round(pose["Angle"].detach().cpu().item(), 3)
+#     position = utils.round_list((pose["Position"]).detach().cpu().tolist(), 3)
+#     axis = utils.round_list(pose["Axis"].detach().cpu().tolist(), 3)
+#     angle = round(pose["Angle"].detach().cpu().item(), 3)
     
-    title += f"Position: {position} {pose_unit} \n"
-    title += f"Axis: {axis} \n"
-    title += f"Angle: {angle}° \n"
+#     title += f"Position: {position} {pose_unit} \n"
+#     title += f"Axis: {axis} \n"
+#     title += f"Angle: {angle}° \n"
 
-    if gt_pose is not None:
+#     if gt_pose is not None:
     
-        gt_position = utils.round_list((gt_pose[0]*1e6).detach().cpu().tolist(), 3)
-        gt_axis = utils.round_list(gt_pose[1].detach().cpu().tolist(), 3)
-        gt_angle = round(gt_pose[2].detach().cpu().item(), 3)
+#         gt_position = utils.round_list((gt_pose[0]*1e6).detach().cpu().tolist(), 3)
+#         gt_axis = utils.round_list(gt_pose[1].detach().cpu().tolist(), 3)
+#         gt_angle = round(gt_pose[2].detach().cpu().item(), 3)
         
-        gt_title += f"Position: {gt_position} um \n"
-        gt_title += f"Axis: {gt_axis} \n"
-        gt_title += f"Angle: {gt_angle}° \n"
+#         gt_title += f"Position: {gt_position} um \n"
+#         gt_title += f"Axis: {gt_axis} \n"
+#         gt_title += f"Angle: {gt_angle}° \n"
 
 
-    return title, gt_title 
+#     return title, gt_title 
+
+
+def pose_title(title, pos, axis, angle):
+    """Generate a title string with pose information."""
+
+    title += f"\nPosition: [{pos[0]:.3f}, {pos[1]:.3f}, {pos[2]:.3f}]"
+    title += f"\nRotation Axis: [{axis[0]:.3f}, {axis[1]:.3f}, {axis[2]:.3f}]"
+    title += f"\nAngle: {angle:.3f}°"
+    
+    return title
     
 ################################################################
 
@@ -311,6 +321,24 @@ def scatter_plot(x, y, title="", labels=("",""), ignore_first=False):
 
     return fig, ax
 
+def quaternion_plot(x, data, title, axis_labels):
+
+    n_frames, n_dims = data.shape
+
+    fig, axs = plt.subplots(n_dims, 1, figsize=(16, 8), sharex=True)
+
+
+    for dim in range(n_dims):
+        axs[dim].plot(x, data[:, dim], marker=".", linestyle="-", color="b")
+        axs[dim].set_ylabel(f"{axis_labels[1][dim]}")
+        axs[dim].set_ylim(-1, 1.1)
+        axs[dim].grid(True)
+        pass
+
+    axs[-1].set_xlabel(axis_labels[0])
+    fig.suptitle(title)
+    
+    return fig, axs
 
 
 def plot_loss(losses, title, log_scale=False):
@@ -329,6 +357,73 @@ def plot_loss(losses, title, log_scale=False):
     return fig
 
 
+def loss_plot(total_loss, data_loss, reg_loss):
+    """Plot Loss History over Iterations"""
+   
+    x = np.arange(len(total_loss))
+
+    fig, axs = plt.subplots(3, 1, figsize=(8, 6), sharex=True)
+    fig.suptitle("Loss History")
+
+    
+    axs[0].plot(x, total_loss, marker=".", linestyle="-", color="b")
+    axs[0].set_title("Total Loss")
+    axs[0].grid(True)
+
+    axs[1].plot(x, data_loss, linestyle="--", color="b")
+    axs[1].set_title("Data Loss")
+    axs[1].grid(True)
+
+    axs[2].plot(x, reg_loss, linestyle="--", color="b")
+    axs[2].set_title("Regularization Loss")
+    axs[2].grid(True)
+    axs[2].set_xlabel("Iteration")
+
+
+    return fig, axs
+
+def extendet_loss_plot(total_loss, data_loss, reg_loss, 
+                       mse_amp_loss, mse_phase_loss, ncc_amp_loss, ncc_phase_loss,
+                       pos_l2_reg_loss, rotation_kalman_reg_loss):
+    """Plot Extended Loss History over Iterations"""
+   
+    x = np.arange(len(total_loss))
+
+    fig, axs = plt.subplots(3, 1, figsize=(8, 6), sharex=True)
+    fig.suptitle("Loss History")
+
+    
+    axs[0].plot(x, total_loss, marker=".", linestyle="-", color="tab:blue", label="Total Loss")
+    axs[0].set_ylabel("Total Loss")
+    axs[0].plot(x, data_loss, linestyle="--", color="tab:red", alpha=0.5, label="Data Loss")
+    axs[0].plot(x, reg_loss, linestyle="--", color="tab:green", alpha=0.5, label="Regularization Loss") 
+    axs[0].legend(loc="upper left", bbox_to_anchor=(1.02, 1.0), borderaxespad=0)
+    #axs[0].set_title("Total Loss")
+    axs[0].grid(True)
+
+    axs[1].plot(x, data_loss, marker=".", linestyle="-", color="tab:blue", label="Data Loss")
+    axs[1].set_ylabel("Data Loss")
+    axs[1].plot(x, mse_amp_loss, linestyle="--", color="tab:red", alpha=0.5, label="MSE Amp Loss")
+    axs[1].plot(x, mse_phase_loss, linestyle="--", color="tab:green", alpha=0.5, label="MSE Phase Loss")
+    axs[1].plot(x, ncc_amp_loss, linestyle="--", color="tab:orange", alpha=0.5, label="NCC Amp Loss")
+    axs[1].plot(x, ncc_phase_loss, linestyle="--", color="tab:purple", alpha=0.5, label="NCC Phase Loss")
+    axs[1].legend(loc="upper left", bbox_to_anchor=(1.02, 1.0), borderaxespad=0)
+    #axs[1].set_title("Data Loss")
+    axs[1].grid(True)
+
+    axs[2].plot(x, reg_loss, marker=".", linestyle="-", color="tab:blue", label="Regularization Loss")
+    axs[2].set_ylabel("Regularization Loss")
+    axs[2].plot(x, pos_l2_reg_loss, linestyle="--", color="tab:red", alpha=0.5, label="L2 Pos")
+    axs[2].plot(x, rotation_kalman_reg_loss,  linestyle="--", color="tab:green", alpha=0.5, label="Q Kalman")
+    axs[2].legend(loc="upper left", bbox_to_anchor=(1.02, 1.0), borderaxespad=0)
+    #axs[2].set_title("Regularization Loss")
+    axs[2].grid(True)
+    
+    axs[-1].set_xlabel("Iteration")
+
+    fig.tight_layout()
+
+    return fig, axs
 
 
 

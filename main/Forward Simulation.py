@@ -120,6 +120,7 @@ if __name__ == "__main__":
     # Logger - Handels Outputs / Visualizations
     logger = master_config["Forward Simulation"]["output"]  
     logger = reporting.ForwardLogger(logger, phase_unwrap)
+    print(logger)
 
 
     print("-- Global Settings --")

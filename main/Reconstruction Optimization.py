@@ -39,16 +39,16 @@ def main():
     print(ground_truth_dataset) 
 
     # Simulation Space
-    sim_space = SimulationSpace(simulation_config, device=device, dtype=dtype, requires_grad=True)
+    sim_space = SimulationSpace(simulation_config, device=device, dtype=dtype, requires_grad=False)
     print(sim_space)
 
 
     # Wavefield Propagator
-    propagator = BPM_Propagator(simulation_config, device=device, requires_grad=True)
+    propagator = BPM_Propagator(simulation_config, device=device, requires_grad=False)
     print(propagator)
 
 
-    recon_opt = ReconOpt(recon_opt_config, recon_poses, voxel_object, ground_truth_dataset, sim_space, propagator, logger, device=device, dtype=dtype)
+    recon_opt = ReconOpt(recon_opt_config, optimized_poses, voxel_object, ground_truth_dataset, sim_space, propagator, logger, device=device, dtype=dtype)
     recon_opt()
 
     pass
@@ -85,12 +85,12 @@ if __name__ == "__main__":
     simulation_config_file = master_config["ReconOpt"]["simulation_config_file"]
     data_config_file = master_config["ReconOpt"]["data_config_file"]
     recon_opt_config_file = master_config["ReconOpt"]["recon_opt_config_file"]
-    recon_poses_file = master_config["ReconOpt"]["recon_poses_file"]
+    opt_pose_file = master_config["ReconOpt"]["recon_poses_file"]
 
     simulation_config_file = os.path.join(config_dir, simulation_config_file)
     data_config_file = os.path.join(config_dir, data_config_file)
     recon_opt_config_file = os.path.join(config_dir, recon_opt_config_file)
-    recon_poses_file = os.path.join(config_dir, recon_poses_file)
+    opt_pose_file = os.path.join(config_dir, opt_pose_file)
 
     # Read Individual Config Files
     print("-- Sub-Configs --")
@@ -106,9 +106,9 @@ if __name__ == "__main__":
         recon_opt_config = json.load(f)
         print(f" ReconOpt Config: {recon_opt_config_file}")
 
-    with open(recon_poses_file, 'r') as f:
-        recon_poses = json.load(f)
-        print(f" Recon Poses: {recon_poses_file}")
+    with open(opt_pose_file, 'r') as f:
+        optimized_poses = json.load(f)
+        print(f" Recon Poses: {opt_pose_file}")
 
     print()
 
@@ -117,7 +117,7 @@ if __name__ == "__main__":
         "Simulation Config": simulation_config,
         "Data Config": data_config,
         "ReconOpt Config": recon_opt_config,
-        "Recon Poses": recon_poses
+        "Recon Poses": opt_pose_file
     }
 
 
@@ -129,6 +129,8 @@ if __name__ == "__main__":
         logger.save_configs(config_data)
     else: 
         logger = reporting.DummyLogger()
+
+    print(logger)
 
 
     print("-- Global Settings --")

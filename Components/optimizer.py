@@ -8,8 +8,7 @@ class Pose_Optimizer:
 
         self.optim = torch.optim.Adam([
                 {"params": pose["Position"], "lr": optimizer_setting["Position"]["lr"]},
-                {"params": pose["Axis"], "lr": optimizer_setting["Axis"]["lr"]},
-                {"params": pose["Angle"], "lr": optimizer_setting["Angle"]["lr"]},
+                {"params": pose["Quaternion"], "lr": optimizer_setting["Quaternion"]["lr"]},
             ])
         
     def zero_grad(self):
@@ -22,13 +21,15 @@ class Pose_Optimizer:
         ret = "-- Optimizer --\n"
         ret += " Type: Adam\n"
         ret += f"  Position: lr = {self.settings['Position']['lr']}\n"
-        ret += f"  Axis: lr = {self.settings['Axis']['lr']}\n"
-        ret += f"  Angle: lr = {self.settings['Angle']['lr']}\n"
-       
+        ret += f"  Quaternion: lr = {self.settings['Quaternion']['lr']}\n"
+
         return ret
     
 
-class ReconOptimizer:
+    
+    
+
+class Recon_Optimizer:
     def __init__(self, params, optimizer_setting):
 
         self.settings = optimizer_setting

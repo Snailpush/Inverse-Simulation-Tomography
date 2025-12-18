@@ -12,6 +12,7 @@ class BPM_Propagator:
         else:
             self.device = device
 
+        self.requires_grad = requires_grad
         
         ## Simulation Space & Wavefield Propagation Settings ##
         self.unit = simulation_config["Base_Grid"]["unit"]
@@ -28,10 +29,7 @@ class BPM_Propagator:
 
 
         # Define Wavefield
-        wavefield = torch.ones((self.grid_shape[0],self.grid_shape[1]))
-        wavefield = wavefield.to(device)
-        wavefield.requires_grad_(requires_grad)
-        self.field = wavefield
+        self.field = self.set_wavefield(type="plain_wave")
         pass
 
     def __repr__(self):
@@ -112,6 +110,20 @@ class BPM_Propagator:
         field = torch.fft.ifft2(field_fft * transfer_function)
 
         return field
+    
+
+    def set_wavefield(self, type="plain_wave"):
+        if type == "plain_wave":
+            self.field = torch.ones((self.grid_shape[0],self.grid_shape[1]), device=self.device, requires_grad=self.requires_grad)
+        
+        # Add other wavefield types here
+        #elif type == "point_source":
+        #    pass
+        
+        else:
+            raise NotImplementedError(f"Wavefield type {type} not implemented.")
+        
+        return self.field
 
 
 class Simple_Propagtor:

@@ -37,38 +37,37 @@ def load_settings(parser):
 
 
 
-def load_optimized_poses(pose_file):
-    """Load optimized poses from PoseOpt and convert them to Pose File for ReconOpt."""
+# def load_optimized_poses(pose_file):
+#     """Load optimized poses from PoseOpt and convert them to Pose File for ReconOpt."""
     
-    with open(pose_file, 'r') as f:
-        pose_opt = json.load(f)
+#     with open(pose_file, 'r') as f:
+#         pose_opt = json.load(f)
 
-    opt_poses = {}
+#     opt_poses = {}
 
-    for frame, info in pose_opt.items():
+#     for frame, info in pose_opt.items():
 
 
-        idx = frame.split(' ')[-1]
-        idx = int(idx)
+#         idx = frame.split(' ')[-1]
+#         idx = int(idx)
 
-        unit = info["unit"]
-        position = info["Position"]
-        axis = info["Axis"]
-        angle = info["Theta"]
+#         unit = info["unit"]
+#         position = info["Position"]
+#         quat = info["Quaternion"]
+#         #axis = info["Axis"]
+#         #angle = info["Theta"]
 
-        opt_poses[frame] = {
-            "idx": idx,
-            "unit": unit,
-            "Position": position,
-            "Axis": axis,
-            "Angle": angle
-        } 
+#         opt_poses[frame] = {
+#             "idx": idx,
+#             "unit": unit,
+#             "Position": position,
+#             "Quaternion": quat
+#             #"Axis": axis,
+#             #"Angle": angle
+#         } 
 
-    # Save Forward Config
-    #with open(recon_opt_file, 'w') as f:
-    #    json.dump(recon_opt, f, indent=2)
 
-    return opt_poses
+#     return opt_poses
 
 
 
@@ -158,6 +157,21 @@ def round_list(lst, decimals=0):
 def dict_mult(dict, factor):
     """Multiply all values in a dictionary by a given factor."""
     return {k: v * factor for k, v in dict.items()}
+
+def dict_add(dict1, dict2):
+    """Add values of two dictionaries with the same keys."""
+    if dict1 is None or len(dict1) == 0:
+        return dict2
+    return {k: dict1[k] + dict2[k] for k in dict1}
+
+def mean_dict(list_of_dicts):
+    """Compute the mean of values across a list of dictionaries with the same keys."""
+    out = {}
+    keys = list_of_dicts[0].keys()
+    for k in keys:
+        values = [d[k] for d in list_of_dicts]
+        out[k] = sum(values) / len(values)
+    return out
 
 def float_parser(x):
     """Parse a string to a float, returning None if the string is 'none' or 'null'."""

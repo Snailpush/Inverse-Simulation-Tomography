@@ -54,8 +54,8 @@ class VoxelObject:
             self.voxel_object = torch.flip(self.voxel_object, dims=[2])        
 
         # Copy to ensure contiguous memory
-        self.voxel_object = self.voxel_object.clone().detach().to(self.device).requires_grad_(requires_grad)
-        #self.voxel_object = nn.Parameter(self.voxel_object.clone(), requires_grad=requires_grad)
+        #self.voxel_object = self.voxel_object.clone().detach().to(self.device).requires_grad_(requires_grad)
+        self.voxel_object = nn.Parameter(self.voxel_object.clone(), requires_grad=requires_grad)
 
         # Shape
         self.obj_shape = torch.tensor(self.voxel_object.shape, dtype=self.dtype, device=self.device)

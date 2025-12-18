@@ -122,6 +122,7 @@ if __name__ == "__main__":
     else: 
         logger = reporting.DummyLogger()
 
+    print(logger)
 
     print("-- Global Settings --")
     print(f" device: {device}")
