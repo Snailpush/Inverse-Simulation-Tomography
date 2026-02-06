@@ -6,9 +6,8 @@ from torch.utils.data import Dataset
 import json
 
 from Components import utils
-
 from Components import wavefield_processing
-
+from Components import quaternion
 
 
 
@@ -30,21 +29,22 @@ class FrameData():
         
         self.file_path = file_path
         
-        self.frame_data_file = data["frame_data_file"]
+        #self.frame_data_file = data["frame_data_file"]
+        self.frame_data_file = data.get("frame_data_file", "Unkown")
         self.frame_idx = data["frame_idx"]
         
         self.amp = data["amp"].to(device=device)
         self.opd = data["opd"].to(device=device)
         
         self.opd_units = data["opd_units"]
-        self.px_size = data["px_size"]
+        self.px_size = data.get("px_size", None)
         
         
         # Guessed pose (smooth interpolation of fixed rotation axis with constant angular velocity over all frames)
-        self.position = data["position"]
-        self.offset = data["offset"]
-        self.rotation_axis = data["rotation_axis"]
-        self.angle = data["angle"]
+        self.position = data.get("position", None)
+        self.offset = data.get("offset", None)
+        self.rotation_axis = data.get("axis", None)
+        self.angle = data.get("angle", None)
 
     def __repr__(self):
 
@@ -388,16 +388,24 @@ def get_poses(poses, device, dtype=torch.float32, requires_grad=False):
 
     for frame, info in poses.items():
 
+        # Core Info
         unit = info["unit"]
         position = torch.tensor(info["Position"], device=device, dtype=dtype).requires_grad_(requires_grad)
         quat = torch.tensor(info["Quaternion"], device=device, dtype=torch.float64).requires_grad_(requires_grad)
         offset = torch.tensor([0.0, 0.0, 0.0], device=device, dtype=dtype).requires_grad_(False)
 
+        # Extra Info
+        axis_angle = quaternion.to_axis_angle(quat)
+        axis, angle = quaternion.split_axis_angle(axis_angle)
+        angle = torch.rad2deg(angle)
+
         pose_list.append({
             "unit": unit,
             "Position": position,
             "Quaternion": quat,
-            "Offset": offset
+            "Offset": offset,
+            "Axis": axis,
+            "Angle": angle
         })
 
     n_poses = len(pose_list)

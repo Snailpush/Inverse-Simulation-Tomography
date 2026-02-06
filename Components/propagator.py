@@ -126,8 +126,8 @@ class BPM_Propagator:
         return self.field
 
 
-class Simple_Propagtor:
-    def __init__(self, simulation_config, device=None):
+class Non_Sacttering_Propagator:
+    def __init__(self, simulation_config, device=None, requires_grad=False):
 
         if device is None:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -137,6 +137,7 @@ class Simple_Propagtor:
         self.unit = simulation_config["Base_Grid"]["unit"]
         self.spatial_resolution = simulation_config["Base_Grid"]["spatial_resolution"] 
         self.wavelength = simulation_config["Base_Grid"]["wavelength"]
+        self.n0 = simulation_config["Base_Grid"]["n_background"]
         pass
 
     def __repr__(self):
@@ -150,13 +151,21 @@ class Simple_Propagtor:
 
         dx, dy, dz = self.spatial_resolution
 
-        opl = torch.sum(RI_distribution * dz, dim=2)  # Optical path length
+        # OPL
+        opl = torch.sum(RI_distribution * dz, dim=2)
 
-        phase = 2*torch.pi + (opl / self.wavelength)
+        # Reference OPL (background medium)
+        opl_ref = self.n0 * RI_distribution.shape[2] * dz
+
+        # OPD
+        opd = opl - opl_ref
+
+        # Phase
+        phase = 2 * torch.pi * opd / self.wavelength
 
         amp = torch.ones_like(phase, device=self.device)
         field = amp * torch.exp(1j * phase)
 
-        return field, amp, phase
+        return field
 
 

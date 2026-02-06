@@ -1,0 +1,18 @@
+{
+	"Info": {
+		"creator": "Jannis.Maron@uni-siegen.de",
+		"created": "<06-January-2026",
+		"description": "Data paths/files for the Synthetic CytoPacq Dataset.",
+		
+		"last_updated": "06-January-2026"
+	},
+	
+	"Data": {
+		
+		"voxel_object": "../../Data/CytoPacq/Voxel Data/voxel_object_v2_t1.pt",
+		
+		"ground_truth": "../../Data/CytoPacq/GT Data/Frame Data/V2_T1/cytopacq_v2_t1.csv",
+		
+		"mask": "../../Data/CytoPacq/Utility Data/Gradient Mask/gradient_mask_v2_t1.pt"
+	}
+}

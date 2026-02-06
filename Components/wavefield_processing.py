@@ -29,6 +29,7 @@ class Transforms:
             "gaussian_blur_scheduled": Scheduled_Gaussian_Blur_Transform,
             "snr_noise": SNR_Noise_Transform,
             "noise": Noise_Transform,
+            "normalize": Normalize_Transform,
         }
         
 
@@ -74,6 +75,16 @@ class Transforms:
         for t in self.phase_transforms:
             t.step()
         pass
+
+    def to_dict(self):
+        """Convert transforms to dictionary format."""
+        dict={
+            "field": {str(t): t.__dict__ for t in self.field_transforms},
+            "amp": {str(t): t.__dict__ for t in self.amp_transforms},
+            "phase": {str(t): t.__dict__ for t in self.phase_transforms},
+        }
+        return dict
+            
     
     def __repr__(self):
 
@@ -160,13 +171,30 @@ class Subtract_Mean_Transform(Base_Transform):
         return f"Subtract Mean"
     
 class Subtract_Background_Transform(Base_Transform):
-    """Subtract Background Transform Class."""
+    def __init__(self, size=None):
+
+        if size is None:
+            self.size = (25, 25)
+        elif isinstance(size, int):
+            self.size = (size, size)
+        else:
+            self.size = size
+
     def apply(self, data):
-        background = data[1:50, 1:50]
+        background = data[1:self.size[0], 1:self.size[1]]
         data = data - torch.mean(background)
         return data
+
     def __repr__(self):
-        return f"Subtract Background"
+        return "Subtract Background"
+    
+class Normalize_Transform(Base_Transform):
+    """Normalize Transform Class."""
+    def apply(self, data):
+        data = (data - torch.min(data)) / (torch.max(data) - torch.min(data))
+        return data
+    def __repr__(self):
+        return f"Normalize"
     
 
 class Scheduled_Gaussian_Blur_Transform(Base_Transform):

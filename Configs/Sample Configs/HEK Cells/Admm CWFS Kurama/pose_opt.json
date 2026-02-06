@@ -1,0 +1,88 @@
+{
+	"Info": {
+		"creator": "Jannis.Maron@uni-siegen.de",
+		"created": "08-September-2025",
+		"description": "Sample Config for Pose Optimization",
+		
+		"08-September-2025": "Created"
+	},
+	
+	
+	"PoseOpt": {
+		
+		"gt_transforms": {
+			"field": {},
+			"amp": {
+				"sqrt": {}
+			},
+			"phase": {
+				"gaussian_blur": {"sigma": 3.0},
+				"subtract_mean": {}
+				}
+		},
+		
+		"sim_transforms": {
+			"field": {},
+			"amp": {},
+			"phase": {
+				"subtract_mean": {}
+			}
+		},
+		
+		"weights": [200, 35, 0.25, 100],
+		
+		"start_frame": 0,
+		"end_frame": null,
+		"frame_steps": 1,
+		
+		
+		"unit": "um",
+		"Position": [13.44, 13.44, 10],
+		"Axis": [1, 0, 0],
+		"Angle": -20,
+		
+		
+		
+		"Initial":{
+			
+			"epochs": 200,
+			
+			"optimizer":{
+				"Position": {"lr": 0.01},
+				"Quaternion": {"lr": 0.005}
+			},
+			
+			"scheduler":{
+				"milestones": [200],
+				"gamma": 0.5
+			},
+			
+			"regularizers" : {}
+			
+		},
+		
+		
+		"Sequential": {
+
+			"epochs": 20,
+
+			"optimizer":{
+				"Position": {"lr": 0.001},
+				"Quaternion": {"lr": 0.0005}
+			},
+			
+			"scheduler":{
+				"milestones": [15,18],
+				"gamma": 0.1
+			},
+			
+			"regularizers" : {
+				"Position": {"var": "Position", "lambda": 0.05},
+				"Quaternion": {"var": "Quaternion", "lambda": 5, "w": [1e-5,1e-5,1e-3,1e-3], "v": [1e-5,1e-5,1e-3,1e-3]}
+			}
+			
+		}
+	
+		
+	}
+}

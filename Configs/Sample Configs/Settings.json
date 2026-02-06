@@ -1,6 +1,6 @@
 {
 	"Common":{
-		"config_dir": "../Configs/Sample Configs",
+		"config_dir": "../Configs/Sample Configs/CytoPacq",
 		"device": null,	
 		"dtype": "float64",
 		"phase_unwrap": false
@@ -8,56 +8,52 @@
 	
 	"Forward Simulation":{
 		
-		"simulation_config_file": "DHM/dhm_simulation.json",
-		"data_config_file": "DHM/DHM_data.json",
-		"forward_config_file": "Debug/Sim Movements/full_rotation.json",
+		"simulation_config_file": "simulation.json",
+		"data_config_file": "data.json",
+		"forward_config_file": "../../../../Data/CytoPacq/GT Data/Trajectory/T1/gt_forward.json",
 		
 		"output": {
-			"output_dir": "../Outputs/Forward Simulation/HEK Cells/DHM/TrackOpt - SimSpace",
-			"options":  ["phase", "amplitude", "slice", "render"]
+			"output_dir": "../Outputs/Forward Simulation/CytoPacq/Ground Truth V2_T1",
+			"options":  ["phase", "amplitude", "slice", "file"]
 		}
-		
 	},
 	
 	"PoseOpt":{
 		
-		"simulation_config_file": "DHM/dhm_simulation.json",
-		"data_config_file": "DHM/DHM_data.json",
-		"pose_opt_config_file": "DHM/DHM_pose_opt.json",
+		"simulation_config_file": "simulation.json",
+		"data_config_file": "data.json",
+		"pose_opt_config_file": "pose_opt.json",
 		
 		"output": {
 			"active": true,
-			"output_dir": "../Outputs/PoseOpt/HEK Cells/DHM/Sample",
-			"options": ["losses", "amps", "phases", "slices", "renders"]
+			"output_dir": "../Outputs/PoseOpt/Cytopacq/Adjust Positions/Unconstrained",
+			"options": ["losses", "amps", "phases", "poses"]
 		}
-		
-		
 	},
 	
 	"ReconOpt":{
 		
-		"simulation_config_file": "DHM/dhm_simulation.json",
-		"data_config_file": "DHM/DHM_data.json",
-		"recon_opt_config_file": "DHM/dhm_recon_opt.json",
-		"recon_poses_file": "Debug/Optimized Poses/dhm_poses_sample.json",
+		"simulation_config_file": "simulation.json",
+		"data_config_file": "data.json",
+		"recon_opt_config_file": "recon_opt.json",
+		"recon_poses_file": "../../../../Data/CytoPacq/GT Data/Trajectory/T1/gt_recon.json",
 		
 		"output": {
 			"active": true,
-			"output_dir": "../Outputs/ReconOpt/HEK Cells/DHM/Sample",
-			"options": ["slices", "renders", "amps", "phases"]
+			"output_dir": "../Outputs/ReconOpt/CytoPacq/Sample",
+			"options": ["losses", "slices", "renders", "amps", "phases"]
 		}
 	
 	},
 	
 	"CombOpt": {
-		"simulation_config_file": "DHM/dhm_simulation.json",
-		"data_config_file": "DHM/DHM_data.json",
-		"pose_opt_config_file": "DHM/dhm_pose_opt.json",
-		"recon_opt_config_file": "DHM/dhm_recon_opt.json",
-		"comb_config_file": "DHM/dhm_comb_opt.json",
+		"simulation_config_file": "simulation.json",
+		"data_config_file": "data.json",
+		"pose_opt_config_file": "pose_opt.json",
+		"recon_opt_config_file": "recon_opt.json",
 		
 		"output": {
-			"output_dir": "../Outputs/CombOpt/HEK Cells/DHM/12_12_25 Long + Always Update",
+			"output_dir": "../Outputs/CombOpt/CytoPacq/05_02_26 V2_T1 Amp+Phase Loss",
 			"options": ["losses", "slices", "renders", "amps", "phases"]
 		}
 	}

@@ -278,7 +278,7 @@ class PoseOpt:
                     self.logger.log_progress(epoch, loss, loss_components, self.pose)
                     # Log/Plot Visualizations
                     self.logger.vis_progress(epoch, amp, phase, self.gt_amp, self.gt_phase, self.sim_space.spatial_resolution,
-                                        self.pose, self.pose_unit, vis_updates=10)
+                                        self.pose, self.pose_unit, vis_updates=20)
                 
                 
                 # Update Parameters
@@ -314,7 +314,7 @@ class PoseOpt:
                 self.logger.log_progress(n_epochs, loss, loss_components, self.pose)
                 # Log/Plot Visualizations
                 self.logger.vis_progress(n_epochs, amp, phase, self.gt_amp, self.gt_phase, self.sim_space.spatial_resolution,
-                                    self.pose, self.pose_unit, vis_updates=10)
+                                    self.pose, self.pose_unit, vis_updates=20)
                 
 
             self.frame_summary(frame_idx)
@@ -371,7 +371,7 @@ class PoseOpt:
     def compute_loss(self, amp, phase):
 
          # --- Compute Loss ---
-
+         
         # Primary Data Loss
         data_loss, loss_components = self.loss_fn(self.gt_amp, self.gt_phase, amp, phase)
         #loss_components["Data Loss"] = data_loss.item()
@@ -428,7 +428,7 @@ class PoseOpt:
 
 
         if True:
-        #if loss["Total Loss"] <= self.best_setting["Loss"]["Total Loss"]:
+        # if loss["Total Loss"] <= self.best_setting["Loss"]["Total Loss"]:
 
             self.best_setting["Epoch"] = epoch
             self.best_setting["Loss"].update({

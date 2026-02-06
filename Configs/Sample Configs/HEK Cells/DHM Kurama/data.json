@@ -1,0 +1,18 @@
+{
+	"Info": {
+		"creator": "Jannis.Maron@uni-siegen.de",
+		"created": "<09-January-2026",
+		"description": "Data paths/files for the Kurama DHM HEK Cell",
+		
+		"last_updated": "09-January-2026"
+	},
+	
+	"Data": {
+		
+		"voxel_object": "../../Data/HEK Cells/DHM Kurama/Voxel Data/DHM_kurama_voxel_object.pt",
+		
+		"ground_truth": "../../Data/HEK Cells/DHM Kurama/GT Frames/DHM_kurama.csv",
+		
+		"mask": null
+	}
+}

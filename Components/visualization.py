@@ -10,6 +10,8 @@ import tqdm
 import pyvista as pv
 from matplotlib import colormaps
 
+from matplotlib.gridspec import GridSpec
+
 
 from Components import utils
 
@@ -101,30 +103,6 @@ def get_extent(support, axis="z", origin="top-left"):
     return extent
 
 
-# def get_titles(title, gt_title, pose, gt_pose, pose_unit="um"): 
-#     """Helper function to format titles with pose information
-#     Used in comparison plots"""
-
-#     position = utils.round_list((pose["Position"]).detach().cpu().tolist(), 3)
-#     axis = utils.round_list(pose["Axis"].detach().cpu().tolist(), 3)
-#     angle = round(pose["Angle"].detach().cpu().item(), 3)
-    
-#     title += f"Position: {position} {pose_unit} \n"
-#     title += f"Axis: {axis} \n"
-#     title += f"Angle: {angle}° \n"
-
-#     if gt_pose is not None:
-    
-#         gt_position = utils.round_list((gt_pose[0]*1e6).detach().cpu().tolist(), 3)
-#         gt_axis = utils.round_list(gt_pose[1].detach().cpu().tolist(), 3)
-#         gt_angle = round(gt_pose[2].detach().cpu().item(), 3)
-        
-#         gt_title += f"Position: {gt_position} um \n"
-#         gt_title += f"Axis: {gt_axis} \n"
-#         gt_title += f"Angle: {gt_angle}° \n"
-
-
-#     return title, gt_title 
 
 
 def pose_title(title, pos, axis, angle):
@@ -264,6 +242,7 @@ def sim_space_render(data, opacity, title, output_file, colormap='jet'):
     plotter = pv.Plotter(off_screen=True)
     plotter.add_title(title)
     plotter.add_volume(grid, cmap=cmap, opacity=opacity, n_colors=256)
+    #plotter.add_volume(grid, cmap=cmap, opacity="linear", n_colors=256)
     plotter.show_axes() 
 
     plotter.render()  # Important: must explicitly call render before screenshot
@@ -426,6 +405,155 @@ def extendet_loss_plot(total_loss, data_loss, reg_loss,
     return fig, axs
 
 
+def summary_plot(idx, poses, 
+                    phase, gt_phase, raw_gt_phase,
+                    amp, gt_amp, raw_gt_amp):
+
+    ### Figure Setup ###
+    fig = plt.figure(figsize=(12, 12))
+
+    gs = GridSpec(
+        nrows=3,
+        ncols=3,
+        height_ratios=[1,1,1],
+        hspace=0.25,
+        wspace=0.35
+    )
+
+    # Top Row
+    # Positions | Axes/Angles | Quaternions
+    # Positions
+    ax1 = fig.add_subplot(gs[0, 0])
+
+    # Axes/Angles
+    axis_angle_stack = gs[0, 1].subgridspec(2, 1, hspace=0.35)
+    ax2 = fig.add_subplot(axis_angle_stack[0])
+    ax3 = fig.add_subplot(axis_angle_stack[1])
+
+    # Quaternions
+    quat_stack = gs[0, 2].subgridspec(4, 1, hspace=0.15)
+    ax4 = fig.add_subplot(quat_stack[0])
+    ax5 = fig.add_subplot(quat_stack[1])
+    ax6 = fig.add_subplot(quat_stack[2])
+    ax7 = fig.add_subplot(quat_stack[3])
+ 
+
+    # Center Row
+    # Optimized Phase | Target Phase | GT Phase
+    # Optimized Phase
+    ax8 = fig.add_subplot(gs[1, 0])
+    # Target Phase
+    ax9 = fig.add_subplot(gs[1, 1])
+    # GT Phase
+    ax10 = fig.add_subplot(gs[1, 2])
+
+    # Top Row 
+    # Optimized Amplitude | Target Amplitude | GT Amplitude
+    # Optimized Amplitude
+    ax11 = fig.add_subplot(gs[2, 0])
+    # Target Amplitude
+    ax12 = fig.add_subplot(gs[2, 1])
+    # GT Amplitude
+    ax13 = fig.add_subplot(gs[2, 2])
+
+    ################################
+    # Populate Plots Here
+
+    x = np.arange(len(poses))
+
+    # Position Plot
+    positions = np.array([pose["Position"].detach().cpu().numpy() for pose in poses])
+    ax1.plot(x, positions[:,0], color="tab:red")
+    ax1.plot(x, positions[:,1], color="tab:green")  
+    ax1.plot(x, positions[:,2], color="tab:blue")  
+    
+    ax1.scatter(idx, positions[idx,0], color="tab:red", marker="o")
+    ax1.scatter(idx, positions[idx,1], color="tab:green", marker="o")
+    ax1.scatter(idx, positions[idx,2], color="tab:blue", marker="o")
+    ax1.vlines(idx, ymin=np.min(positions), ymax=np.max(positions), color="gray", linestyle="--")
+    
+    ax1.set_title("Position")
+    ax1.set_xlabel("Frames")
+    ax1.set_ylabel("Position (um)")
+    ax1.grid(True)
+
+    # Axis/Angle Plot
+    axes = np.array([pose["Axis"].detach().cpu().numpy() for pose in poses])
+    angles = np.array([pose["Angle"].detach().cpu().numpy() for pose in poses])
+    ax2.plot(x, axes[:,0], color="tab:red")
+    ax2.plot(x, axes[:,1], color="tab:green")
+    ax2.plot(x, axes[:,2], color="tab:blue")
+
+    ax2.scatter(idx, axes[idx,0], color="tab:red", marker="o")
+    ax2.scatter(idx, axes[idx,1], color="tab:green", marker="o")
+    ax2.scatter(idx, axes[idx,2], color="tab:blue", marker="o")
+    ax2.vlines(idx, ymin=-1, ymax=1, color="gray", linestyle="--")
+    ax2.set_title("Axis / Angle")
+    ax2.set_ylabel("Axis Value")
+    ax2.grid(True)
+
+    ax3.plot(x, angles, color="tab:orange")
+    ax3.scatter(idx, angles[idx], color="tab:orange", marker="o")
+    ax3.vlines(idx, ymin=np.min(angles), ymax=np.max(angles), color="gray", linestyle="--")
+
+    ax3.set_ylabel("Angle")
+    ax3.set_xlabel("Frames")
+    ax3.grid(True)
+
+    # Quaternion Plots
+    quaternions = np.array([pose["Quaternion"].detach().cpu().numpy() for pose in poses])
+    ax4.plot(x, quaternions[:,0], color="tab:red")
+    ax5.plot(x, quaternions[:,1], color="tab:green")    
+    ax6.plot(x, quaternions[:,2], color="tab:blue")    
+    ax7.plot(x, quaternions[:,3], color="tab:orange")
+    
+    ax4.scatter(idx, quaternions[idx,0], color="tab:red", marker="o")
+    ax5.scatter(idx, quaternions[idx,1], color="tab:green", marker="o")
+    ax6.scatter(idx, quaternions[idx,2], color="tab:blue", marker="o")
+    ax7.scatter(idx, quaternions[idx,3], color="tab:orange", marker="o")    
+    ax4.vlines(idx, ymin=-1, ymax=1, color="gray", linestyle="--")
+    ax5.vlines(idx, ymin=-1, ymax=1, color="gray", linestyle="--")
+    ax6.vlines(idx, ymin=-1, ymax=1, color="gray", linestyle="--")
+    ax7.vlines(idx, ymin=-1, ymax=1, color="gray", linestyle="--")
+
+    ax4.set_title("Quaternion")
+    ax4.grid(True)
+    ax4.set_ylabel("qw")
+    ax5.grid(True)
+    ax5.set_ylabel("qx")
+    ax6.grid(True)
+    ax6.set_ylabel("qy")
+    ax7.grid(True)
+    ax7.set_ylabel("qz")
+    ax7.set_xlabel("Frames")
+
+    # Phase Images
+    im8 = ax8.imshow(phase, cmap="gray")
+    ax8.set_title("Optimized Phase")
+    fig.colorbar(im8, ax=ax8, fraction=0.046, pad=0.04)
+
+    im9 = ax9.imshow(gt_phase, cmap="gray")
+    ax9.set_title("Target Phase")
+    fig.colorbar(im9, ax=ax9, fraction=0.046, pad=0.04)
+
+    im10 = ax10.imshow(raw_gt_phase, cmap="gray")
+    ax10.set_title("GT Phase")
+    fig.colorbar(im10, ax=ax10, fraction=0.046, pad=0.04)
+
+    # Amplitude Images
+    im11 = ax11.imshow(amp, cmap="gray")
+    ax11.set_title("Optimized Amplitude")
+    fig.colorbar(im11, ax=ax11, fraction=0.046, pad=0.04)
+
+    im12 = ax12.imshow(gt_amp, cmap="gray")
+    ax12.set_title("Target Amplitude")
+    fig.colorbar(im12, ax=ax12, fraction=0.046, pad=0.04)
+
+    im13 = ax13.imshow(raw_gt_amp, cmap="gray")
+    ax13.set_title("GT Amplitude")
+    fig.colorbar(im13, ax=ax13, fraction=0.046, pad=0.04)
+
+    return fig
 
 
 

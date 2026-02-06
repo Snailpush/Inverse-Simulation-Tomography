@@ -1,0 +1,51 @@
+{
+	"Info": {
+		"creator": "Jannis.Maron@uni-siegen.de",
+		"created": "10-September-2025",
+		"description": "Sample Config for Reconstruction Optimization",
+		
+		"10-September-2025": "Created"
+	},
+	
+	"ReconOpt":{
+		
+		"gt_transforms": {
+			"field": {},
+			"amp": {},
+			"phase": {
+				"subtract_background": {}
+			}
+		},
+		
+		"sim_transforms": {
+			"field": {},
+			"amp": {},
+			"phase": {
+				"subtract_background": {}
+			}
+		},
+	
+		
+		
+		"epochs": 60,
+		
+		
+		"weights": [50, 750, 0.1, 75],
+
+		"optimizer": {
+			"Voxel Object": {"lr": 5e-4}
+		},
+		"scheduler": {
+			"milestones": [61],
+			"gamma": 0.5
+		},
+		
+		"regularizers" : {
+			"TV Reg": {"lambda": 1000}
+		}
+		
+	}
+	
+	
+	
+}

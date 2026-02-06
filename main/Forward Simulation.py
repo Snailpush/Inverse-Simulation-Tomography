@@ -14,7 +14,7 @@ from Components import reporting
 
 from Components.voxel_object import VoxelObject
 from Components.simulation_space import SimulationSpace
-from Components.propagator import BPM_Propagator
+from Components.propagator import BPM_Propagator, Non_Sacttering_Propagator
 
 from Core.Forward import Forward_Simulation
 
@@ -36,6 +36,7 @@ def main():
 
 
     # Wavefield Propagator
+    #propagator = BPM_Propagator(simulation_config, device=device, requires_grad=False)
     propagator = BPM_Propagator(simulation_config, device=device, requires_grad=False)
     print(propagator)
 
@@ -116,10 +117,18 @@ if __name__ == "__main__":
 
     print()
 
+    config_data = {
+        "Settings": master_config,
+        "Simulation Config": simulation_config,
+        "Data Config": data_config,
+        "Forward Config": forward_config
+    }
+
 
     # Logger - Handels Outputs / Visualizations
     logger = master_config["Forward Simulation"]["output"]  
     logger = reporting.ForwardLogger(logger, phase_unwrap)
+    logger.save_configs(config_data)
     print(logger)
 
 

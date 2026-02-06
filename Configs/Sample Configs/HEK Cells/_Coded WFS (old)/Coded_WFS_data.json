@@ -12,10 +12,10 @@
 	
 	"Data": {
 		
-		"voxel_object": "../Data/Voxel Data/HEK Cells/Raw_Coded_WFS_Tomog.pt",
+		"voxel_object": "../../Data/HEK Cells/Addm_CWFS_cell_1/Voxel Data/Coded_WFS_voxel_object.pt",
 	
-		"ground_truth": "../Data/GT Data/HEK Cells/Raw Coded WFS/Coded WFS.csv",
+		"ground_truth": "../../Data/HEK Cells/Addm_CWFS_cell_1//GT Frames/Coded WFS.csv",
 		
-		"mask": "../Data/Mask Data/HEK Cells/Raw_Coded_WFS_Mask.pt"
+		"mask": "../../Data/HEK Cells/Addm_CWFS_cell_1/Utility Data/Gradient Mask/Raw_Coded_WFS_Mask.pt"
 	}
 }

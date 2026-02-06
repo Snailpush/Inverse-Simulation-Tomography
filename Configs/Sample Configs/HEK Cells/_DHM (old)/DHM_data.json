@@ -10,10 +10,10 @@
 	
 	"Data": {
 		
-		"voxel_object": "../Data/Voxel Data/HEK Cells/DHM_Tomog.pt",
+		"voxel_object": "../../Data/HEK Cells/DHM_cell_1/Voxel Data/DHM_voxel_object.pt",
 		
-		"ground_truth": "../Data/GT Data/HEK Cells/DHM/DHM_Frames.csv",
+		"ground_truth": "../../Data/HEK Cells/DHM_cell_1/GT Frames/DHM_Frames.csv",
 		
-		"mask": "../Data/Mask Data/HEK Cells/DHM_Mask.pt"
+		"mask": "../../Data/HEK Cells/DHM_cell_1//Utility Data/Gradient Mask/DHM_Mask.pt"
 	}
 }

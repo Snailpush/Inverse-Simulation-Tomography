@@ -1,0 +1,11 @@
+{
+	"Base_Grid": {
+		"unit": "um",
+		"wavelength": 0.640,
+		"spatial_resolution": [0.1075, 0.1075, 0.1075],
+		"grid_shape": [250, 250, 250],
+		"n_background": 1.334,
+		"sim_mask": {},
+		"backpropagation_distance": 13
+	}
+}

@@ -1,0 +1,53 @@
+{
+	"Info": {
+		"creator": "Jannis.Maron@uni-siegen.de",
+		"created": "30-September-2025",
+		"description": "Sample Config for Raw Coded WFS Reconstruction Optimization",
+		
+		"30-September-2025": "Created"
+	},
+	
+	"ReconOpt":{
+		
+		"gt_transforms": {
+			"field": {},
+			"amp": {
+				"sqrt":{}
+			},
+			"phase": {
+				"gaussian_blur": {"sigma": 3.0},
+				"subtract_mean": {}
+				}
+		},
+		
+		"sim_transforms": {
+			"field": {},
+			"amp": {},
+			"phase": {
+				"subtract_mean": {}
+			}
+		},
+	
+		
+		
+		"epochs": 20,
+		
+		"weights": [100, 50, 0.5, 150],
+		
+		"optimizer": {
+			"Voxel Object": {"lr": 1e-4}
+		},
+		"scheduler": {
+			"milestones": [15,18],
+			"gamma": 0.5
+		},
+		
+		"regularizers" : {
+			"TV Reg": {"lambda": 500}
+		}
+		
+	}
+	
+	
+	
+}

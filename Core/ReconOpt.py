@@ -139,7 +139,8 @@ class ReconOpt:
             self.optimizer.zero_grad()
 
             # --- Loop over dataset ---
-            for frame_idx in tqdm(range(self.n_poses), total=self.n_poses, bar_format="{l_bar}{bar:10}{r_bar}{bar:-10b}"):
+            indices = torch.randperm(self.n_poses)            
+            for frame_idx in tqdm(indices, total=self.n_poses, bar_format="{l_bar}{bar:10}{r_bar}{bar:-10b}"):
 
                 # Get Pose for current frame
                 self.pose = self.poses[frame_idx]
@@ -184,7 +185,7 @@ class ReconOpt:
                 # Save Voxel Object of current epoch - Disk Space expensive
                 #self.logger.log_epoch(epoch, self.voxel_object)
                 # Visualize Slice/Render of current epoch
-                self.logger.vis_voxel_object(epoch, self.voxel_object, out="epoch")
+                self.logger.vis_voxel_object(epoch, self.voxel_object)
                 # Visualize Amp/Phase last pose of current epoch
                 self.logger.vis_last_wavefield(self.voxel_object, self.amp, self.phase, 
                                           self.gt_amp, self.gt_phase, self.pose)
@@ -245,7 +246,7 @@ class ReconOpt:
             self.logger.print_loss(self.epoch_loss, self.epoch_loss_components)
             self.logger.track_loss_across_epochs(self.epoch_loss)
             self.reset_epoch_loss()
-            self.logger.vis_voxel_object(self.n_epochs, self.voxel_object, out="epoch")
+            self.logger.vis_voxel_object(self.n_epochs, self.voxel_object)
             self.logger.vis_last_wavefield(self.voxel_object, self.amp, self.phase, 
                                         self.gt_amp, self.gt_phase, self.pose)
             print()
@@ -409,7 +410,7 @@ class ReconOpt:
             # Slice and Render
             print(" - Rendering Voxel Object")
             #self.logger.vis_best_voxel_object(self.best_setting["voxel_object"])
-            self.logger.vis_voxel_object(self.best_setting["Epoch"], self.best_setting["voxel_object"], out="summary")
+            self.logger.vis_best_voxel_object(self.best_setting["Epoch"], self.best_setting["voxel_object"])
 
 
             # Amp / Phase for every pose
@@ -436,6 +437,8 @@ class ReconOpt:
 
                     self.logger.vis_ground_truth(frame_idx, self.voxel_object, amp, phase, 
                                                     gt_amp, gt_phase, raw_gt_amp, raw_gt_phase, pose)
+                    
+                    self.logger.vis_summary(frame_idx, self.poses, amp, phase, gt_amp, gt_phase, raw_gt_amp, raw_gt_phase)
 
 
             # Sequence Video

@@ -29,7 +29,9 @@ from Components.wavefield_processing import Transforms
 
 
 class ForwardLogger():
-    """Logger for 'Forward Simulation.py
+    """Logger for 'Forward Simulation.py'
+    Always Logs:
+        - configs: saves the simulation configs in a json file
     Output Options:
         - amplitude: saves amplitude images
         - phase: saves phase images
@@ -48,19 +50,36 @@ class ForwardLogger():
         self.data_dir =  os.path.join(self.output_dir, "Data")
         self.image_dir = os.path.join(self.output_dir, "Images")
         self.video_dir =  os.path.join(self.output_dir, "Videos")
+        self.config_dir = os.path.join(self.output_dir, "Configs")
 
         self.phase_unwrap = phase_unwrap
 
         os.makedirs(self.output_dir, exist_ok=True)
-        os.makedirs(self.data_dir, exist_ok=True)
-        os.makedirs(self.image_dir, exist_ok=True)
-        os.makedirs(self.video_dir, exist_ok=True)
+        os.makedirs(self.config_dir, exist_ok=True)
+        
+        if "file" in self.options:
+            os.makedirs(self.data_dir, exist_ok=True)
+
+        if any(opt in self.options for opt in ["amplitude", "phase", "slice", "sim_space", "render"]):
+            os.makedirs(self.image_dir, exist_ok=True)
+            os.makedirs(self.video_dir, exist_ok=True)
+        
     
     def __repr__(self):
         ret = "-- Output Path --"
         ret += f"\n Data/Images to: {self.output_dir}"
         ret += f"\n Visualization Options: {self.options}\n"
         return ret
+    
+    def save_configs(self, configs):
+        """Saves the Run configs in the configs output directory"""
+        for  config_name, config in configs.items():
+
+            config_data_file = os.path.join(self.config_dir, f"{config_name}.json")
+
+            with open(config_data_file, 'w') as f:
+                json.dump(config, f, indent=2)
+
 
 
 
@@ -132,7 +151,7 @@ class ForwardLogger():
             sim_space = RI_distribution.detach().cpu().numpy()
             slice_image = visualization.get_slice_image(sim_space, axis=axis, idx=idx)
             
-            spatial_support = [spatial_resolution[i]*slice_image.shape[i] for i in range(2)]
+            spatial_support = [spatial_resolution[i]*RI_distribution.shape[i] for i in range(3)]
             extent = visualization.get_extent(spatial_support, axis=axis)
             
             # Plot
@@ -252,7 +271,7 @@ class ForwardLogger():
                 "offset": offset,
                 "axis": axis,
                 "angle": theta,
-                "transforms": transforms,
+                "transforms": transforms.to_dict(),
                 "sim_unit": sim_unit,
                 "grid_shape": grid_shape,
                 "spatial_resolution": spatial_resolution,
@@ -363,26 +382,44 @@ def print_epoch_update(epoch, loss, loss_components, pose,
 ########################################################################
 
 class PoseOptLogger():
-    """Logger for Pose Optimization"""
+    """Logger for Pose Optimization
+    Always Logs:
+        - Configs: saves the run configs in a json file
+        - Summary of full Pose Opt Run:
+            - best settings: Per Frame Pose/Loss
+            - visualizations:
+                - Images: Poses
+                - Videos: Amplitude/Phase/Slice/Render
+        Per Frame Logs:
+            - visualizations: Best Amplitude/Phase/Slice/Render
+    Optional Logs:
+        Option: "losses"
+            - Per Epoch: saves Total/Data/Reg Loss and individual loss components per epoch in a csv file
+            - Per Epoch: Plots Total/Data/Reg Loss and individual loss components over epochs every few epochs
+            - Summary: Plots Total/Data/Reg Loss and individual loss components of best settings over all frames
+            - Summary: Plots Epoch of best setting over all frames
+        Option: "amps":
+            - Per Epoch: saves amplitude image of current setting every few epochs
+        Option: "phases":
+            - Per Epoch: saves phase image of current setting every few epochs
+        Option: "poses":
+            - Per Epoch: saves position and quaternion of current setting every few epochs in a csv file
+        
+        """
     def __init__(self, logger_dict, unwrap):
 
         self.output_dir = logger_dict["output_dir"]
 
-        # Root Output Dir 
-        #self.out_path = os.path.join(self.output_dir, self.run_name)
-        self.out_path = self.output_dir
-        os.makedirs(self.out_path, exist_ok=True)
+        self.configs_path = os.path.join(self.output_dir, "Configs")
+        self.summary_path = os.path.join(self.output_dir, "Summary") 
 
-        # Configs Output Dir
-        self.configs_path = os.path.join(self.out_path, "Configs")
+        self.frames_path = os.path.join(self.output_dir, "Frames")
+
+        
+        os.makedirs(self.output_dir, exist_ok=True)
         os.makedirs(self.configs_path, exist_ok=True)
-
-        # Best Settings (Best Poses / Best Losses / Best Phase/Amp) Output Dir
-        self.summary_path = os.path.join(self.out_path, "Summary") 
         os.makedirs(self.summary_path, exist_ok=True)
 
-        # Individual Frame Output Dir - Sub directories for each Frame
-        self.frames_path = os.path.join(self.out_path, "Frames")
 
         # Visualization options
         self.options = logger_dict["options"]
@@ -393,7 +430,7 @@ class PoseOptLogger():
     def __repr__(self):
 
         ret = "-- Output Path --"
-        ret += f"{self.out_path}\n"
+        ret += f"{self.output_dir}\n"
         ret += f"{self.options}\n"
 
         return ret
@@ -438,59 +475,66 @@ class PoseOptLogger():
     ### Per epoch logging and visualization ###
 
     def log_progress(self, epoch, loss, loss_components, pose):
-        """"""
-
-        # Pose Logging - Save Position and Quaternion to CSV files
-        pos = pose["Position"].detach().tolist() 
-        q = pose["Quaternion"].detach().tolist() 
-
-        position_file = os.path.join(self.frame_path, f"Position.csv")
-
-        columns = ["pos_x", "pos_y", "pos_z"]
-        df_r = pd.DataFrame([pos], columns=columns, index=[epoch])
-        df_r.to_csv(position_file, mode='a', index=True, header=not os.path.exists(position_file))
-
-        # Save Quaternions
-        quaternion_file = os.path.join(self.frame_path, f"Rotation.csv")
-        columns = ["q_w", "q_x", "q_y", "q_z"]
-        df_q = pd.DataFrame([q], columns=columns, index=[epoch])
-        df_q.to_csv(quaternion_file, mode='a', index=True, header=not os.path.exists(quaternion_file))
-
+        """Logs the current epoch results (Loss/Pose) in csv files for the current frame and saves them in the current frame directory. 
+        Also saves the losses in lists for visualization."""
 
         # Log current epoch (Loss/Pose)
-        total_loss = loss["Total Loss"].item()
-        data_loss = loss["Data Loss"]
-        reg_loss = loss["Reg Loss"]
+        if "losses" in self.options:
 
-        mse_amp_loss = loss_components.get("MSE Amp Loss", None)
-        mse_phase_loss = loss_components.get("MSE Phase Loss", None)
-        ncc_amp_loss = loss_components.get("NCC Amp Loss", None)
-        ncc_phase_loss = loss_components.get("NCC Phase Loss", None)
-        pos_reg_loss = loss_components.get("Position Reg Loss", None)
-        quat_reg_loss = loss_components.get("Quaternion Reg Loss", None)
+            total_loss = loss["Total Loss"].item()
+            data_loss = loss["Data Loss"]
+            reg_loss = loss["Reg Loss"]
+
+            mse_amp_loss = loss_components.get("MSE Amp Loss", None)
+            mse_phase_loss = loss_components.get("MSE Phase Loss", None)
+            ncc_amp_loss = loss_components.get("NCC Amp Loss", None)
+            ncc_phase_loss = loss_components.get("NCC Phase Loss", None)
+            pos_reg_loss = loss_components.get("Position Reg Loss", None)
+            quat_reg_loss = loss_components.get("Quaternion Reg Loss", None)
 
 
-        # save loss of current epoch for visualization
-        self.total_losses.append(total_loss)
-        self.data_losses.append(data_loss)
-        self.reg_losses.append(reg_loss)
+            # save loss of current epoch for visualization
+            self.total_losses.append(total_loss)
+            self.data_losses.append(data_loss)
+            self.reg_losses.append(reg_loss)
 
-        self.mse_amp_losses.append(mse_amp_loss)
-        self.mse_phase_losses.append(mse_phase_loss)
-        self.ncc_amp_losses.append(ncc_amp_loss)
-        self.ncc_phase_losses.append(ncc_phase_loss)
-        self.pos_reg_losses.append(pos_reg_loss)
-        self.quat_reg_losses.append(quat_reg_loss)
+            self.mse_amp_losses.append(mse_amp_loss)
+            self.mse_phase_losses.append(mse_phase_loss)
+            self.ncc_amp_losses.append(ncc_amp_loss)
+            self.ncc_phase_losses.append(ncc_phase_loss)
+            self.pos_reg_losses.append(pos_reg_loss)
+            self.quat_reg_losses.append(quat_reg_loss)
 
-        loss_file = os.path.join(self.frame_path, f"Losses.csv")
-        columns = ["Total Loss", "Data Loss", "Reg Loss", 
-                   "MSE Amp Loss", "MSE Phase Loss", "NCC Amp Loss", "NCC Phase Loss", 
-                   "Pos Reg Loss", "Quat Reg Loss"]
-        df_loss = pd.DataFrame([[total_loss, data_loss, reg_loss, 
-                                 mse_amp_loss, mse_phase_loss, ncc_amp_loss, ncc_phase_loss, 
-                                 pos_reg_loss, quat_reg_loss]], 
-                               columns=columns, index=[epoch])
-        df_loss.to_csv(loss_file, mode='a', index=True, header=not os.path.exists(loss_file))
+            loss_file = os.path.join(self.frame_path, f"Losses.csv")
+            columns = ["Total Loss", "Data Loss", "Reg Loss", 
+                    "MSE Amp Loss", "MSE Phase Loss", "NCC Amp Loss", "NCC Phase Loss", 
+                    "Pos Reg Loss", "Quat Reg Loss"]
+            df_loss = pd.DataFrame([[total_loss, data_loss, reg_loss, 
+                                    mse_amp_loss, mse_phase_loss, ncc_amp_loss, ncc_phase_loss, 
+                                    pos_reg_loss, quat_reg_loss]], 
+                                columns=columns, index=[epoch])
+            df_loss.to_csv(loss_file, mode='a', index=True, header=not os.path.exists(loss_file))
+
+
+
+
+        # Pose Logging - Save current Position and Quaternion to CSV files
+        if "poses" in self.options:
+
+            pos = pose["Position"].detach().tolist() 
+            q = pose["Quaternion"].detach().tolist() 
+
+            position_file = os.path.join(self.frame_path, f"Position.csv")
+
+            columns = ["pos_x", "pos_y", "pos_z"]
+            df_r = pd.DataFrame([pos], columns=columns, index=[epoch])
+            df_r.to_csv(position_file, mode='a', index=True, header=not os.path.exists(position_file))
+
+            # Save Quaternions
+            quaternion_file = os.path.join(self.frame_path, f"Rotation.csv")
+            columns = ["q_w", "q_x", "q_y", "q_z"]
+            df_q = pd.DataFrame([q], columns=columns, index=[epoch])
+            df_q.to_csv(quaternion_file, mode='a', index=True, header=not os.path.exists(quaternion_file))
 
 
 
@@ -498,29 +542,30 @@ class PoseOptLogger():
 
     def vis_progress(self, epoch, amp, phase, gt_amp, gt_phase, spatial_resolution, 
                      pose, pose_unit, vis_updates=10):
-        """Visualizations every couple epochs"""
+        """Creates visualizations every few epochs of the current epoch results (Loss/Amp/Phase) and saves them in the current frame directory."""
 
         # Show visualization every few epochs
         if epoch % vis_updates != 0:
             return
 
-        pos = pose["Position"].detach().cpu()
-        quat = pose["Quaternion"].detach().cpu()
-        axis_angle = quaternion.to_axis_angle(quat)
-        axis, angle = quaternion.split_axis_angle(axis_angle)
-        angle = torch.rad2deg(angle)
-
          # Plot Total/Data/Reg Loss 
         if "losses" in self.options:
 
-
-            #fig, ax = visualization.loss_plot(self.total_losses, self.data_losses, self.reg_losses)
             fig, ax = visualization.extendet_loss_plot(self.total_losses, self.data_losses, self.reg_losses,
                                                       self.mse_amp_losses, self.mse_phase_losses,
                                                       self.ncc_amp_losses, self.ncc_phase_losses,
                                                       self.pos_reg_losses, self.quat_reg_losses)
             visualization.save_plot(fig, self.frame_path, "Frame Loss.png")
-        
+
+
+
+
+        # Get current Pose for titles      
+        pos = pose["Position"].detach().cpu()
+        quat = pose["Quaternion"].detach().cpu()
+        axis_angle = quaternion.to_axis_angle(quat)
+        axis, angle = quaternion.split_axis_angle(axis_angle)
+        angle = torch.rad2deg(angle)
 
 
         # Plot Amp Comparison for current epoch
@@ -575,6 +620,7 @@ class PoseOptLogger():
             visualization.save_plot(fig, phase_path, f"Phase_Epoch_{epoch:03d}.png")
 
         pass
+
 
     ### Per frame logging and visualization ###
 
@@ -638,95 +684,102 @@ class PoseOptLogger():
         _, gt_amp, gt_phase = frame.get_ground_truth(propagator, gt_transforms)
         _, raw_amp, raw_phase = frame.get_ground_truth(propagator, Transforms({"field": {}, "amp": {}, "phase": {}}))
 
-        if "amps" in self.options:
-            
-            amp = amp.detach().cpu().numpy()
-            gt_amp = gt_amp.detach().cpu().numpy()
-            raw_amp = raw_amp.detach().cpu().numpy()
-
-
-            spatial_support = [spatial_resolution[i]*amp.shape[i] for i in range(2)]
-
-            title = visualization.pose_title("Current Amp \n", position, axis, angle)
-            gt_title = "Target Amp\n"
-            raw_gt_title = "Raw GT Amp\n"
-
-            axis_labels = {"x-axis": f"Y ({pose_unit})", "y-axis": f"X ({pose_unit})"}
-            
-            fig, ax = visualization.comparison_plot([amp, gt_amp, raw_amp], spatial_support, 
-                                                    [title, gt_title, raw_gt_title], axis_labels, cmap="gray", grid=True)
-            
-            fig.suptitle(f"Best Setting - Amplitude")
-            
-            visualization.save_plot(fig, self.frame_path, f"Best Amplitude.png")
-
-
-        if "phases" in self.options:
-
-            phase = phase.detach().cpu().numpy()
-            gt_phase = gt_phase.detach().cpu().numpy()
-            raw_gt_phase = raw_phase.detach().cpu().numpy()
-
-            if self.unwrap:
-                phase = unwrap_phase(phase)
-                gt_phase = unwrap_phase(gt_phase)
-                raw_gt_phase = unwrap_phase(raw_gt_phase)
             
 
-            spatial_support = [spatial_resolution[i]*phase.shape[i] for i in range(2)]
 
-            title = visualization.pose_title("Current Phase\n", position, axis, angle)
-            gt_title = "Target Phase\n"
-            raww_gt_title = "Raw GT Phase\n"
-
-            axis_labels = {"x-axis": f"Y ({pose_unit})", "y-axis": f"X ({pose_unit})"}
-            
-            fig, ax = visualization.comparison_plot([phase, gt_phase, raw_gt_phase], spatial_support, 
-                                                    [title, gt_title, raww_gt_title], axis_labels, cmap="gray", grid=True)
-            fig.suptitle(f"Best Setting - Phase")
-            
-            visualization.save_plot(fig, self.frame_path, f"Best Phase.png")
+        ### Amplitude Comparison Plot ###
+        amp = amp.detach().cpu().numpy()
+        gt_amp = gt_amp.detach().cpu().numpy()
+        raw_amp = raw_amp.detach().cpu().numpy()
 
 
-        if "slices" in self.options:
+        spatial_support = [spatial_resolution[i]*amp.shape[i] for i in range(2)]
 
-            # Non-exposed settings
-            axis = "z"
-            idx = round(position[2].item() / spatial_resolution[2])
+        title = visualization.pose_title("Current Amp \n", position, axis, angle)
+        gt_title = "Target Amp\n"
+        raw_gt_title = "Raw GT Amp\n"
 
-            # Slice
-            sim_space = best_setting["RI Distribution"].detach().cpu().numpy()
-            slice_image = visualization.get_slice_image(sim_space, axis=axis, idx=idx)
-            
-            spatial_support = [spatial_resolution[i]*slice_image.shape[i] for i in range(2)]
-            extent = visualization.get_extent(spatial_support, axis=axis)
-            
-            # Plot
-            title = f"Slice_{idx:03d} - Best Setting"
-            axis_labels = {"x-axis": f"Y ({pose_unit})", "y-axis": f"X ({pose_unit})"}
-            fig, ax = visualization.base_plot(slice_image, spatial_support, title, axis_labels, extent=extent, grid=True)
-            
-            # Save
-            visualization.save_plot(fig, self.frame_path, f"Best Slice.png")
+        axis_labels = {"x-axis": f"Y ({pose_unit})", "y-axis": f"X ({pose_unit})"}
+        
+        fig, ax = visualization.comparison_plot([amp, gt_amp, raw_amp], spatial_support, 
+                                                [title, gt_title, raw_gt_title], axis_labels, cmap="gray", grid=True)
+        
+        fig.suptitle(f"Best Setting - Amplitude")
+        
+        visualization.save_plot(fig, self.frame_path, f"Best Amplitude.png")
 
-        if "renders" in self.options:
-            
-            # Sim space
-            sim_space = best_setting["RI Distribution"].detach().cpu().numpy()
-            
-            title = f"Simulation Space - Best Setting"
-            # Opacity - optimized for dhm HEK Cell
-            opacity = 56*[0] + torch.linspace(0,5,100).tolist() + torch.linspace(8,100,100).tolist()
-            #opacity = "sigmoid"
 
-            # Output Path
-            output_file = os.path.join(self.frame_path, f"Best Render.png")
 
-            # Render and Save
-            visualization.sim_space_render(sim_space, opacity, title, output_file)
+       
+        ### Phase Comparison Plot ###
+        phase = phase.detach().cpu().numpy()
+        gt_phase = gt_phase.detach().cpu().numpy()
+        raw_gt_phase = raw_phase.detach().cpu().numpy()
 
+        if self.unwrap:
+            phase = unwrap_phase(phase)
+            gt_phase = unwrap_phase(gt_phase)
+            raw_gt_phase = unwrap_phase(raw_gt_phase)
+        
+
+        spatial_support = [spatial_resolution[i]*phase.shape[i] for i in range(2)]
+
+        title = visualization.pose_title("Current Phase\n", position, axis, angle)
+        gt_title = "Target Phase\n"
+        raww_gt_title = "Raw GT Phase\n"
+
+        axis_labels = {"x-axis": f"Y ({pose_unit})", "y-axis": f"X ({pose_unit})"}
+        
+        fig, ax = visualization.comparison_plot([phase, gt_phase, raw_gt_phase], spatial_support, 
+                                                [title, gt_title, raww_gt_title], axis_labels, cmap="gray", grid=True)
+        fig.suptitle(f"Best Setting - Phase")
+        
+        visualization.save_plot(fig, self.frame_path, f"Best Phase.png")
+
+
+
+
+        ### RI Distribution Slice Plot ###
+        # Non-exposed settings
+        axis = "z"
+        idx = round(position[2].item() / spatial_resolution[2])
+
+        # Slice
+        sim_space = best_setting["RI Distribution"].detach().cpu().numpy()
+        slice_image = visualization.get_slice_image(sim_space, axis=axis, idx=idx)
+        
+        spatial_support = [spatial_resolution[i]*slice_image.shape[i] for i in range(2)]
+        extent = visualization.get_extent(spatial_support, axis=axis)
+        
+        # Plot
+        title = f"Slice_{idx:03d} - Best Setting"
+        axis_labels = {"x-axis": f"Y ({pose_unit})", "y-axis": f"X ({pose_unit})"}
+        fig, ax = visualization.base_plot(slice_image, spatial_support, title, axis_labels, extent=extent, grid=True)
+        
+        # Save
+        visualization.save_plot(fig, self.frame_path, f"Best Slice.png")
+
+
+
+
+        ### RI Distribution 3D Render ###
+        sim_space = best_setting["RI Distribution"].detach().cpu().numpy()
+        
+        title = f"Simulation Space - Best Setting"
+        # Opacity - optimized for dhm HEK Cell
+        opacity = 56*[0] + torch.linspace(0,5,100).tolist() + torch.linspace(8,100,100).tolist()
+        #opacity = "sigmoid"
+
+        # Output Path
+        output_file = os.path.join(self.frame_path, f"Best Render.png")
+
+        # Render and Save
+        visualization.sim_space_render(sim_space, opacity, title, output_file)
 
         pass
+
+
+
 
     def best_setting_summary(self, total_nframes):
 
@@ -758,7 +811,7 @@ class PoseOptLogger():
         for frame in best_poses:
             frame_idx = int(frame.split(" ")[1])
             position = np.array(best_poses[frame]["Position"])
-            quat = torch.tensor(best_poses[frame]["Quaternion"]) # quaternion operations use torch tensors
+            quat = torch.tensor(best_poses[frame]["Quaternion"]) 
             axis_angle = quaternion.to_axis_angle(quat)
             axis, theta = quaternion.split_axis_angle(axis_angle)
             theta = torch.rad2deg(theta)
@@ -813,15 +866,19 @@ class PoseOptLogger():
                                                         expected_min=expected_min, expected_max=expected_max, ignore_first=False)
         fig.savefig(os.path.join(self.summary_path, "best_angles.png"))
 
-        # Best Epochs
-        fig, ax = visualization.scatter_plot(frames, best_epochs, "Best Epochs", ("Frames", "Epochs"), ignore_first=True)
-        fig.savefig(os.path.join(self.summary_path, "best_epochs.png"))
+        
+        
+        if "losses" in self.options:
+            # Best Epochs
+            fig, ax = visualization.scatter_plot(frames, best_epochs, "Best Epochs", ("Frames", "Epochs"), ignore_first=True)
+            fig.savefig(os.path.join(self.summary_path, "best_epochs.png"))
 
 
-        # Best Losses
-        #fig = visualization.plot_loss(total_losses, "Best Losses", log_scale=False)
-        fig, ax = visualization.loss_plot(total_losses, data_losses, reg_losses)
-        fig.savefig(os.path.join(self.summary_path, "Losses.png"))
+            # Best Losses
+            #fig = visualization.plot_loss(total_losses, "Best Losses", log_scale=False)
+            fig, ax = visualization.loss_plot(total_losses, data_losses, reg_losses)
+            fig.savefig(os.path.join(self.summary_path, "Losses.png"))
+
 
         plt.close("all")
 
@@ -834,18 +891,17 @@ class PoseOptLogger():
         frame_dirs = natsort.natsorted(frame_dirs)
 
 
-        if "amps" in self.options:
-            print("  Amplitude")
-            visualization.write_video_from_folders(frame_dirs, "Best Amplitude.png", self.summary_path, "Best Amplitude.avi")
-        if "phases" in self.options:
-            print("  Phase")
-            visualization.write_video_from_folders(frame_dirs, "Best Phase.png", self.summary_path, "Best Phase.avi")
-        if "slices" in self.options:
-            print("  Slice")
-            visualization.write_video_from_folders(frame_dirs, "Best Slice.png", self.summary_path, "Best Slice.avi")
-        if "renders" in self.options:
-            print("  Render")
-            visualization.write_video_from_folders(frame_dirs, "Best Render.png", self.summary_path, "Best Render.avi")
+        print("  Amplitude")
+        visualization.write_video_from_folders(frame_dirs, "Best Amplitude.png", self.summary_path, "Best Amplitude.avi")
+        
+        print("  Phase")
+        visualization.write_video_from_folders(frame_dirs, "Best Phase.png", self.summary_path, "Best Phase.avi")
+        
+        print("  Slice")
+        visualization.write_video_from_folders(frame_dirs, "Best Slice.png", self.summary_path, "Best Slice.avi")
+        
+        print("  Render")
+        visualization.write_video_from_folders(frame_dirs, "Best Render.png", self.summary_path, "Best Render.avi")
 
         pass
 
@@ -865,33 +921,58 @@ class PoseOptLogger():
 
 
 class ReconOptLogger:
+    """Logger for Reconstruction Optimization
+    Always Logs:
+        - Configs: saves the run configs in a json files
+        - Summary of full Recon Opt Run:
+            - Voxel Object: Optimized Voxel Object in .pt file
+            - visualizations:
+                - Images: Amplitude/Phase of optimized voxel onject with reconstruction poses
+                - Images: Slice/Render of optimized voxel object
+                - Videos: Amplitude/Phase of optimized voxel onject with reconstruction poses
+                - Images: Extended Plots of Combination of Reconstruction Poses and Amplitude/Phase Comparison (see 'terse' option to disable)
+                - Videos: Extended Plots of Combination of Reconstruction Poses and Amplitude/Phase Comparison (see 'terse' option to disable)
+            Per Epoch Logs:
+                - visualizations: Amplitude/Phase/Slice/Render of current setting every few epochs
+    Optional Logs:
+        Option: "slices"
+            - Per Epoch: Slice of voxel object for current epoch
+            - Summary: Evolution of slice of voxel object of best settings over all epochs
+        Option: "renders"
+            - Per Epoch: Render of voxel object for current epoch
+            - Summary: Evolution of render of voxel object of best settings over all epochs
+        Option: "losses"
+            - Summary: Loss plot over all epochs
+        Option: "amps"
+            - Per Epoch: saves amplitude image of last processed pose
+        Option: "phases":
+            - Per Epoch: saves phase image of last processed pose
+        Option: "terse":
+            - Disables Extended Plots of Combination of Reconstruction Poses and Amplitude/Phase Comparison
+            (speeds up final summary)
+    """
+    
+
     def __init__(self, logger_dict, unwrap):
 
         self.output_dir = logger_dict["output_dir"]
 
-        # Root Output Dir 
-        self.out_path = self.output_dir
-        os.makedirs(self.out_path, exist_ok=True)
-
-
-        # Configs Output Dir
-        self.configs_path = os.path.join(self.out_path, "Configs")
-        os.makedirs(self.configs_path, exist_ok=True)
-
-        # Summary / Best Settings Output Dir
-        self.summary_path = os.path.join(self.out_path, "Summary")
-        os.makedirs(self.summary_path, exist_ok=True)
-
-
+        self.configs_path = os.path.join(self.output_dir, "Configs")
+        self.summary_path = os.path.join(self.output_dir, "Summary")
         self.amp_path = os.path.join(self.summary_path, "Amps")
-        os.makedirs(self.amp_path, exist_ok=True)
-
         self.phase_path = os.path.join(self.summary_path, "Phases")
-        os.makedirs(self.phase_path, exist_ok=True)
-
+        self.summary_plot_path = os.path.join(self.summary_path, "Plots")
 
         # Individual Frame Output Dir - Sub directories for each Frame
-        self.epochs_path = os.path.join(self.out_path, "Epochs")
+        self.epochs_path = os.path.join(self.output_dir, "Epochs")
+
+        os.makedirs(self.output_dir, exist_ok=True)
+        os.makedirs(self.configs_path, exist_ok=True)
+        os.makedirs(self.summary_path, exist_ok=True)
+        os.makedirs(self.amp_path, exist_ok=True)
+        os.makedirs(self.phase_path, exist_ok=True)
+        os.makedirs(self.summary_plot_path, exist_ok=True)
+
 
         # Visualization options
         self.options = logger_dict["options"]
@@ -899,15 +980,15 @@ class ReconOptLogger:
         # Flag for phase unwrapping
         self.unwrap = unwrap
 
-
         self.total_losses = []
         self.data_losses = []
         self.reg_losses = []
         
+
     def __repr__(self):
 
         ret = "-- Output Path --"
-        ret += f"{self.out_path}\n"
+        ret += f"{self.output_dir}\n"
         ret += f"{self.options}\n"
 
         return ret
@@ -949,18 +1030,20 @@ class ReconOptLogger:
                 print(f"   {name}: {round(value, 6)}")
 
     def track_loss_across_epochs(self, loss):
+
+        if "losses" not in self.options:
         
-        self.total_losses.append(loss["Total Loss"])
-        self.data_losses.append(loss["Data Loss"])
-        self.reg_losses.append(loss["Reg Loss"])
+            self.total_losses.append(loss["Total Loss"])
+            self.data_losses.append(loss["Data Loss"])
+            self.reg_losses.append(loss["Reg Loss"])
 
-        # Maybe extend to individual loss components later
-
+            # Maybe extend to individual loss components later
+        pass
 
     #### Per Epoch Logging ####
 
     def log_epoch(self, epoch, voxel_object):
-        """Save Voxel Object for current epoch
+        """Save Voxel Object for current epoch to a .pt file.
         Currently unused to save disc space"""
 
         if isinstance(epoch, int):
@@ -976,12 +1059,8 @@ class ReconOptLogger:
 
 
 
-    def vis_voxel_object(self, idx, voxel_object, out="epoch"):
-
-        if out == "epoch":
-            path = self.epoch_path
-        elif out == "summary":
-            path = self.summary_path
+    def vis_voxel_object(self, idx, voxel_object):
+        """Visualize the voxel object of the current epoch with slice and render visualizations."""
 
         if isinstance(idx, int):
             idx = f"_{idx:03d}"
@@ -997,7 +1076,7 @@ class ReconOptLogger:
             spatial_resolution = voxel_object.spatial_resolution.detach().cpu().numpy()
            
             slice_image = visualization.get_slice_image(data, axis=axis, idx=slice_idx) 
-            spatial_support = [spatial_resolution[i]*slice_image.shape[i] for i in range(2)]
+            spatial_support = [spatial_resolution[i]*voxel_object.voxel_object.shape[i] for i in range(3)]
             extent = visualization.get_extent(spatial_support, axis=axis)
 
             
@@ -1007,7 +1086,7 @@ class ReconOptLogger:
             fig, ax = visualization.base_plot(slice_image, spatial_support, title, axis_labels, extent=extent, grid=True)
             
             # Save
-            visualization.save_plot(fig, path, f"Slice{idx}.png")
+            visualization.save_plot(fig, self.epoch_path, f"Slice{idx}.png")
             pass
 
 
@@ -1019,7 +1098,7 @@ class ReconOptLogger:
             opacity = 56*[0] + torch.linspace(0,5,100).tolist() + torch.linspace(8,100,100).tolist()
 
             title = f"Voxel Object - Epoch{idx}"
-            output_path = os.path.join(path, f"Render{idx}.png")
+            output_path = os.path.join(self.epoch_path, f"Render{idx}.png")
 
             visualization.sim_space_render(data, opacity=opacity, title=title, output_file=output_path)
             pass
@@ -1027,7 +1106,7 @@ class ReconOptLogger:
         pass
 
     def vis_last_wavefield(self, voxel_object, amp, phase, gt_amp, gt_phase, pose):
-        """Visualize Amp/Phase of the last frame/pose in the dataset"""
+        """Visualize Amp/Phase of the last processed frame/pose in the dataset"""
 
         pose_unit = pose["unit"]
         position = pose["Position"].detach().cpu()
@@ -1084,8 +1163,51 @@ class ReconOptLogger:
     def vis_losses(self):
         """Plot Losses over all epochs"""
 
-        fig, ax = visualization.loss_plot(self.total_losses, self.data_losses, self.reg_losses)
-        visualization.save_plot(fig, self.summary_path, "Losses.png")
+        if "losses" not in self.options:
+            fig, ax = visualization.loss_plot(self.total_losses, self.data_losses, self.reg_losses)
+            visualization.save_plot(fig, self.summary_path, "Losses.png")
+        pass
+
+    def vis_best_voxel_object(self, idx, voxel_object):
+
+        if isinstance(idx, int):
+            idx = f"_{idx:03d}"
+
+
+        ### Slice Plot ###
+        # Non-exposed settings
+        axis = "z"
+        slice_idx = 125
+
+        # Slice
+        data = voxel_object.voxel_object.detach().cpu().numpy()
+        spatial_resolution = voxel_object.spatial_resolution.detach().cpu().numpy()
+        
+        slice_image = visualization.get_slice_image(data, axis=axis, idx=slice_idx) 
+        spatial_support = [spatial_resolution[i]*voxel_object.voxel_object.shape[i] for i in range(3)]
+        extent = visualization.get_extent(spatial_support, axis=axis)
+
+        
+        # Plot
+        title = f"Voxel Object Slice @ Epoch{idx}"
+        axis_labels = {"x-axis": f"Y ({voxel_object.unit})", "y-axis": f"X ({voxel_object.unit})"}
+        fig, ax = visualization.base_plot(slice_image, spatial_support, title, axis_labels, extent=extent, grid=True)
+        
+        # Save
+        visualization.save_plot(fig, self.summary_path, f"Slice{idx}.png")
+
+
+        ### Render ###
+        data = voxel_object.voxel_object.detach().cpu().numpy()
+
+        # Opacity - optimized for dhm HEK Cell
+        opacity = 56*[0] + torch.linspace(0,5,100).tolist() + torch.linspace(8,100,100).tolist()
+
+        title = f"Voxel Object - Epoch{idx}"
+        output_path = os.path.join(self.summary_path, f"Render{idx}.png")
+
+        visualization.sim_space_render(data, opacity=opacity, title=title, output_file=output_path)
+
         pass
 
 
@@ -1096,36 +1218,6 @@ class ReconOptLogger:
         voxel_object.save(voxel_path)
 
         pass
-
-  
-
-    def vis_sequence(self):
-        """Create Viedos for Amplitude/Phase and Slices/Renders"""
-
-        if "amps" in self.options:
-            print("  Amplitude")
-            amp_path = os.path.join(self.summary_path, "Amps")
-            visualization.write_video(amp_path, self.summary_path, "Amplitude.avi")
-        
-        if "phases" in self.options:
-            print("  Phase")
-            phase_path = os.path.join(self.summary_path, "Phases")
-            visualization.write_video(phase_path, self.summary_path, "Phase.avi")
-
-
-         # Get individual Frame/image directories 
-        epoch_dirs = [os.path.join(self.epochs_path, d) for d in os.listdir(self.epochs_path) if d.startswith("Epoch")]
-        epoch_dirs = natsort.natsorted(epoch_dirs)
-
-        if "slices" in self.options:
-            print("  Slices")
-            visualization.write_video_from_folders(epoch_dirs, "Slice", self.summary_path, "Voxel Object Slice.avi", fps=10)
-
-        if "renders" in self.options:
-            print("  Renders")
-            visualization.write_video_from_folders(epoch_dirs, "Render", self.summary_path, "Voxel Object Render.avi", fps=10)
-        pass
-
 
 
     def vis_ground_truth(self, idx, voxel_object, amp, phase, gt_amp, gt_phase, raw_gt_amp, raw_gt_phase, pose):
@@ -1191,7 +1283,59 @@ class ReconOptLogger:
 
         pass
 
+    
 
+    def vis_summary(self, idx, poses, amp, phase, gt_amp, gt_phase, raw_gt_amp, raw_gt_phase):
+        """Extended Summary Plot of Combination of Reconstruction Poses and Amplitude/Phase Comparison"""
+        if "terse" in self.options:
+            return
+
+        amp = amp.detach().cpu().numpy()
+        gt_amp = gt_amp.detach().cpu().numpy()
+        raw_gt_amp = raw_gt_amp.detach().cpu().numpy()
+
+        phase = phase.detach().cpu().numpy()
+        gt_phase = gt_phase.detach().cpu().numpy()
+        raw_gt_phase = raw_gt_phase.detach().cpu().numpy()
+
+        fig = visualization.summary_plot(idx, poses, 
+                                        phase, gt_phase, raw_gt_phase,
+                                        amp, gt_amp, raw_gt_amp)
+        
+        visualization.save_plot(fig, self.summary_plot_path, f"Summary_{idx:03d}.png")
+
+    
+    def vis_sequence(self):
+        """Create Viedos for Amplitude/Phase and Slices/Renders"""
+
+        if "amps" in self.options:
+            print("  Amplitude")
+            amp_path = os.path.join(self.summary_path, "Amps")
+            visualization.write_video(amp_path, self.summary_path, "Amplitude.avi")
+        
+        if "phases" in self.options:
+            print("  Phase")
+            phase_path = os.path.join(self.summary_path, "Phases")
+            visualization.write_video(phase_path, self.summary_path, "Phase.avi")
+
+
+         # Get individual Frame/image directories 
+        epoch_dirs = [os.path.join(self.epochs_path, d) for d in os.listdir(self.epochs_path) if d.startswith("Epoch")]
+        epoch_dirs = natsort.natsorted(epoch_dirs)
+
+        if "slices" in self.options:
+            print("  Slices")
+            visualization.write_video_from_folders(epoch_dirs, "Slice", self.summary_path, "Voxel Object Slice.avi", fps=10)
+
+        if "renders" in self.options:
+            print("  Renders")
+            visualization.write_video_from_folders(epoch_dirs, "Render", self.summary_path, "Voxel Object Render.avi", fps=10)
+
+
+        if "terse" not in self.options:
+            print("Summary Plots")
+            visualization.write_video(self.summary_plot_path, self.summary_path, "Summary.avi")
+            pass
 
 
 

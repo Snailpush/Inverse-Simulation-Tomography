@@ -15,7 +15,7 @@
 				"sqrt":{}
 			},
 			"phase": {
-				"gaussian_blur": {"sigma": 7.5},
+				"gaussian_blur_scheduled": {"max_sigma": 7.5, "min_sigma":0.01, "num_steps":5},
 				"subtract_mean": {}
 				}
 		},
@@ -32,7 +32,7 @@
 	
 		
 		
-		"epochs": 20,
+		"epochs": 5,
 		
 		
 		"weights": [20, 75, 0.3, 300],

@@ -1,0 +1,20 @@
+{
+	"Info": {
+		"creator": "Jannis.Maron@uni-siegen.de",
+		"created": "<09-January-2026",
+		"description": "Data related to the Coded WFS recordings.",
+		
+		"last_updated": "09-January-2026"
+	},
+	
+
+	"Data": {
+		
+		"voxel_object": "../../Data/HEK Cells/Deep CWFS Superstar/Voxel Data/deep_cwfs_superstar_voxel_object.pt",
+		
+		"ground_truth": "../../Data/HEK Cells/Deep CWFS Superstar/GT Frames/deep_cwfs_superstar.csv",
+		
+		"mask": "../../Data/HEK Cells/Deep CWFS Superstar/Utility Data/Gradient Mask/deep_cwfs_superstar_gradient_mask.pt"
+	
+	}
+}

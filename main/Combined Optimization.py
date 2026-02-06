@@ -33,6 +33,7 @@ utils.clear_gpu_cache()
 def main():
 
     # --- Initialize --- #
+    init_voxel_object_path = data_config["Data"]["voxel_object"]
 
     # Load Voxel Object / RI Volume
     voxel_object = VoxelObject(data_config, dtype=dtype, device=device, requires_grad=False)
@@ -52,16 +53,16 @@ def main():
 
     #loop
 
-    N_ITER = 20
-    for i in range(1,N_ITER+1):
+    N_CYCLES = 4
+    for i in range(1,N_CYCLES+1):
 
         # --- Pose optimization --- #
-        print(f"\n== PoseOpt {i}/{N_ITER} ==\n")
+        print(f"\n== PoseOpt {i}/{N_CYCLES} ==\n")
 
 
         # Overwrite PoseOpt settings with CombOpt settings
         # Reduce Blur
-        pose_opt_config["PoseOpt"]["gt_transforms"]["phase"]["gaussian_blur"]["sigma"] *= 0.75
+        #pose_opt_config["PoseOpt"]["gt_transforms"]["phase"]["gaussian_blur"]["sigma"] *= 0.9
 
 
         # Logger
@@ -86,16 +87,18 @@ def main():
         with open(optimized_pose_file, 'r') as f:
             opt_poses = json.load(f)
 
-        # Enable gradients for Voxel Object
+        # Reset to initial Voxel Object for Recon + Enable gradients for Voxel Object
+        #data_config["Data"]["voxel_object"] = init_voxel_object_path
+        #voxel_object = VoxelObject(data_config, dtype=dtype, device=device, requires_grad=True)
         voxel_object.voxel_object = nn.Parameter(voxel_object.voxel_object, requires_grad=True)
 
 
         # --- Reconstruction optimization --- #
 
-        print(f"\n== ReconOpt {i}/{N_ITER} ==\n")
+        print(f"\n== ReconOpt {i}/{N_CYCLES} ==\n")
 
         # Overwrite ReconOpt settings with CombOpt settings
-        recon_opt_config["ReconOpt"]["gt_transforms"]["phase"]["gaussian_blur"]["sigma"] *= 0.75
+        #recon_opt_config["ReconOpt"]["gt_transforms"]["phase"]["gaussian_blur"]["sigma"] *= 0.9
 
         # Logger
         # Redirect outputs to CombOpt folder
@@ -114,7 +117,8 @@ def main():
         # --- Transition ReconOpt -> PoseOpt --- #
 
         # Get optimized Voxel Object
-        data_config["Data"]["voxel_object"] = os.path.join(recon_logger_settings["output_dir"], "Summary/voxel_object.pt")
+        opt_voxel_object_path = os.path.join(recon_logger_settings["output_dir"], "Summary/voxel_object.pt")
+        data_config["Data"]["voxel_object"] = opt_voxel_object_path
         voxel_object = VoxelObject(data_config, dtype=dtype, device=device, requires_grad=False)
 
          # Set Initial Pose for next PoseOpt
