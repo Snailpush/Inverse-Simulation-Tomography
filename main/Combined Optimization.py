@@ -53,7 +53,7 @@ def main():
 
     #loop
 
-    N_CYCLES = 4
+    N_CYCLES = 16
     for i in range(1,N_CYCLES+1):
 
         # --- Pose optimization --- #
@@ -88,8 +88,8 @@ def main():
             opt_poses = json.load(f)
 
         # Reset to initial Voxel Object for Recon + Enable gradients for Voxel Object
-        #data_config["Data"]["voxel_object"] = init_voxel_object_path
-        #voxel_object = VoxelObject(data_config, dtype=dtype, device=device, requires_grad=True)
+        data_config["Data"]["voxel_object"] = init_voxel_object_path
+        voxel_object = VoxelObject(data_config, dtype=dtype, device=device, requires_grad=True)
         voxel_object.voxel_object = nn.Parameter(voxel_object.voxel_object, requires_grad=True)
 
 
@@ -121,17 +121,17 @@ def main():
         data_config["Data"]["voxel_object"] = opt_voxel_object_path
         voxel_object = VoxelObject(data_config, dtype=dtype, device=device, requires_grad=False)
 
-         # Set Initial Pose for next PoseOpt
-        new_pos = opt_poses["Frame 0"]["Position"]
-        new_quat = opt_poses["Frame 0"]["Quaternion"]
-        new_quat = torch.tensor(new_quat, device=device, dtype=torch.float64)
-        axis_angle = quaternion.to_axis_angle(new_quat)
-        axis, angle = quaternion.split_axis_angle(axis_angle)
-        angle = torch.rad2deg(angle)
+        #  # Set Initial Pose for next PoseOpt
+        # new_pos = opt_poses["Frame 0"]["Position"]
+        # new_quat = opt_poses["Frame 0"]["Quaternion"]
+        # new_quat = torch.tensor(new_quat, device=device, dtype=torch.float64)
+        # axis_angle = quaternion.to_axis_angle(new_quat)
+        # axis, angle = quaternion.split_axis_angle(axis_angle)
+        # angle = torch.rad2deg(angle)
 
-        pose_opt_config["PoseOpt"]["Position"] = new_pos
-        pose_opt_config["PoseOpt"]["Axis"] = axis.cpu().numpy().tolist()
-        pose_opt_config["PoseOpt"]["Angle"] = angle.item() 
+        # pose_opt_config["PoseOpt"]["Position"] = new_pos
+        # pose_opt_config["PoseOpt"]["Axis"] = axis.cpu().numpy().tolist()
+        # pose_opt_config["PoseOpt"]["Angle"] = angle.item() 
 
     pass
 

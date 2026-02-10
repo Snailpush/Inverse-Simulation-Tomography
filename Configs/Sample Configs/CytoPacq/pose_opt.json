@@ -26,11 +26,11 @@
 			}
 		},
 	
-		"weights": [50, 750, 0.1, 75],
+		"weights": [100, 750, 0.1, 75],
 		
 		
 		"start_frame": 0,
-		"end_frame": 249,
+		"end_frame": null,
 		"frame_steps": 1,
 		
 		
@@ -51,8 +51,8 @@
 			},
 			
 			"scheduler":{
-				"milestones": [190],
-				"gamma": 0.5
+				"milestones": [100,133,166],
+				"gamma": 0.1
 			},
 			
 			"regularizers" : {}
@@ -62,7 +62,7 @@
 		
 		"Sequential": {
 
-			"epochs": 20,
+			"epochs": 40,
 
 			"optimizer":{
 				"Position": {"lr": 0.001},
@@ -70,13 +70,13 @@
 			},
 			
 			"scheduler":{
-				"milestones": [21],
+				"milestones": [30],
 				"gamma": 0.5
 			},
 			
 			"regularizers" : {
-				"Position": {"var": "Position", "lambda": 0.0},
-				"Quaternion": {"var": "Quaternion", "lambda": 25, "w": [1e-5,1e-5,1e-3,1e-3], "v": [1e-5,1e-5,1e-3,1e-3]}
+				"Position": {"var": "Position", "lambda": 0.05},
+				"Quaternion": {"var": "Quaternion", "lambda": 50, "w": [1e-5,1e-5,1e-3,1e-3], "v": [1e-5,1e-5,1e-3,1e-3]}
 			}
 			
 		}

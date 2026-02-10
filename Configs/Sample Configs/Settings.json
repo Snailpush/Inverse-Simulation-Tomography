@@ -26,7 +26,7 @@
 		
 		"output": {
 			"active": true,
-			"output_dir": "../Outputs/PoseOpt/Cytopacq/Adjust Positions/Unconstrained",
+			"output_dir": "../Outputs/PoseOpt/Cytopacq/Temp",
 			"options": ["losses", "amps", "phases", "poses"]
 		}
 	},
@@ -53,8 +53,8 @@
 		"recon_opt_config_file": "recon_opt.json",
 		
 		"output": {
-			"output_dir": "../Outputs/CombOpt/CytoPacq/05_02_26 V2_T1 Amp+Phase Loss",
-			"options": ["losses", "slices", "renders", "amps", "phases"]
+			"output_dir": "../Outputs/CombOpt/CytoPacq/06_02_26 V2_T1 Amp + Reset",
+			"options": ["losses", "slices", "renders", "amps", "phases", "poses"]
 		}
 	}
 }

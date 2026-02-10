@@ -1031,7 +1031,7 @@ class ReconOptLogger:
 
     def track_loss_across_epochs(self, loss):
 
-        if "losses" not in self.options:
+        if "losses" in self.options:
         
             self.total_losses.append(loss["Total Loss"])
             self.data_losses.append(loss["Data Loss"])
@@ -1163,7 +1163,7 @@ class ReconOptLogger:
     def vis_losses(self):
         """Plot Losses over all epochs"""
 
-        if "losses" not in self.options:
+        if "losses" in self.options:
             fig, ax = visualization.loss_plot(self.total_losses, self.data_losses, self.reg_losses)
             visualization.save_plot(fig, self.summary_path, "Losses.png")
         pass
