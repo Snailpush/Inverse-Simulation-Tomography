@@ -121,6 +121,7 @@ class SimulationSpace:
 
         # Object center in physical unit
         self.obj_center = (self.obj_shape * self.obj_spatial_res) / 2
+
     
     def add_voxel_object(self, voxel_object, position, offset, rotation, pose_unit):
         """
@@ -150,7 +151,7 @@ class SimulationSpace:
 
         # Convert Position/Offset units to Simulation units
         conversion_factor = utils.unit_conversion(from_unit=pose_unit, to_unit=self.sim_unit)
-        position = position * conversion_factor
+        position = position * conversion_factor + self.sim_space_center # Translation
         offset = offset * conversion_factor
 
         # Shift Center of the Voxel Object
@@ -222,7 +223,7 @@ class SimulationSpace:
 
         # Convert Position/Offset units to Simulation units
         conversion_factor = utils.unit_conversion(from_unit=pose_unit, to_unit=self.sim_unit)
-        position = position * conversion_factor # + self.sim_space_center
+        position = position * conversion_factor + self.sim_space_center # Translation
         offset = offset * conversion_factor
 
         # Shift Center of the Voxel Object

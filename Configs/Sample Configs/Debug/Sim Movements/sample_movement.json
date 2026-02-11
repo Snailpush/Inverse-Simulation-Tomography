@@ -1,30 +1,35 @@
 {
 	"transforms":{
-		"field": {
-			"crop": {"x_min":125, "y_min":125, "x_max":-125, "y_max":-125}
-		},
+		"field": {},
 		"amp": {},
-		"phase": {
-			"subtract_mean": {}
-		}
+		"phase": {}
 	},
 	
 	"Movement": {
-		"time_steps": 91,
+		"time_steps": 15,
 		"unit": "um",
 		"Positions": [
-			{ "pos": [20, 20, 25], "time": 0 },
-			{ "pos": [30, 30, 25], "time": 90 }
+			{ "pos": [0, -3.5, 0], "time": 0},
+			{ "pos": [0, -3.0, 0], "time": 1},
+			{ "pos": [0, -2.5, 0], "time": 2},
+			{ "pos": [0, -2.0, 0], "time": 3},
+			{ "pos": [0, -1.5, 0], "time": 4},
+			{ "pos": [0, -1.0, 0], "time": 5},
+			{ "pos": [0, -0.5, 0], "time": 6},
+			{ "pos": [0, 0.0, 0], "time": 7},
+			{ "pos": [0, 0.5, 0], "time": 8},
+			{ "pos": [0, 1.0, 0], "time": 9},
+			{ "pos": [0, 1.5, 0], "time": 10},
+			{ "pos": [0, 2.0, 0], "time": 11},
+			{ "pos": [0, 2.5, 0], "time": 12},
+			{ "pos": [0, 3.0, 0], "time": 13},
+			{ "pos": [0, 3.5, 0], "time": 14}
 		],
 		"Offsets": [
 			{ "offset": [0, 0, 0], "time": 0 }
 		],
 		"Rotations": [
-			{ "axis": [1.0, 0.0, 0.0], "theta": 0, "time": 0 },
-			{ "axis": [1.0, 0.0, 0.0], "theta": 45, "time": 22},
-			{ "axis": [1.0, 0.0, 0.0], "theta": 180, "time": 45},
-			{ "axis": [1.0, 0.0, 0.0], "theta": 270, "time": 68},
-			{ "axis": [1.0, 0.0, 0.0], "theta": 360, "time": 90}
+			{ "axis": [1.0, 0.0, 0.0], "theta": 0, "time": 0 }
 		]
 	}
 }

@@ -740,12 +740,13 @@ class PoseOptLogger():
 
 
         ### RI Distribution Slice Plot ###
+        sim_space = best_setting["RI Distribution"].detach().cpu().numpy()
+
         # Non-exposed settings
         axis = "z"
-        idx = round(position[2].item() / spatial_resolution[2])
+        idx = round((position[2] / spatial_resolution[2] + sim_space.shape[2]/2).item())
 
         # Slice
-        sim_space = best_setting["RI Distribution"].detach().cpu().numpy()
         slice_image = visualization.get_slice_image(sim_space, axis=axis, idx=idx)
         
         spatial_support = [spatial_resolution[i]*slice_image.shape[i] for i in range(2)]

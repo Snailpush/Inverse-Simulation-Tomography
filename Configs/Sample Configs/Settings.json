@@ -10,10 +10,11 @@
 		
 		"simulation_config_file": "simulation.json",
 		"data_config_file": "data.json",
-		"forward_config_file": "../../../../Data/CytoPacq/GT Data/Trajectory/T1/gt_forward.json",
+		"forward_config_file_": "../../../../Data/CytoPacq/GT Data/Trajectory/T4/gt_forward.json",
+		"forward_config_file": "../Debug/Sim Movements/sample_movement.json",
 		
 		"output": {
-			"output_dir": "../Outputs/Forward Simulation/CytoPacq/Ground Truth V2_T1",
+			"output_dir": "../Outputs/Forward Simulation/CytoPacq/y-change ground truth V2",
 			"options":  ["phase", "amplitude", "slice", "file"]
 		}
 	},
@@ -26,7 +27,7 @@
 		
 		"output": {
 			"active": true,
-			"output_dir": "../Outputs/PoseOpt/Cytopacq/Temp",
+			"output_dir": "../Outputs/PoseOpt/Cytopacq/Translation Test",
 			"options": ["losses", "amps", "phases", "poses"]
 		}
 	},
@@ -36,11 +37,11 @@
 		"simulation_config_file": "simulation.json",
 		"data_config_file": "data.json",
 		"recon_opt_config_file": "recon_opt.json",
-		"recon_poses_file": "../../../../Data/CytoPacq/GT Data/Trajectory/T1/gt_recon.json",
+		"recon_poses_file": "../../../../Data/CytoPacq/GT Data/Trajectory/T3/gt_recon.json",
 		
 		"output": {
 			"active": true,
-			"output_dir": "../Outputs/ReconOpt/CytoPacq/Sample",
+			"output_dir": "../Outputs/ReconOpt/CytoPacq/Translation Test",
 			"options": ["losses", "slices", "renders", "amps", "phases"]
 		}
 	

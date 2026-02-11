@@ -66,7 +66,8 @@ class VoxelObject:
         self.spatial_resolution = spatial_resolution.detach().clone().to(dtype=self.dtype, device=self.device)
 
         ## Gradient Mask ##
-        self.mask_path = data_config["Data"]["mask"]
+        #self.mask_path = data_config["Data"]["mask"]
+        self.mask_path = data_config["Data"].get("mask", None) 
 
         # Load Mask
         if self.mask_path is not None and os.path.isfile(self.mask_path):
