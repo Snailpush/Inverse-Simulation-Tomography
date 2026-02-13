@@ -9,7 +9,7 @@
 	
 	"Data": {
 		
-		"voxel_object": "../../Data/CytoPacq/Voxel Data/ground_truth_v2.pt",
+		"voxel_object": "../../Data/CytoPacq/Voxel Data/voxel_object_v2_t3.pt",
 		
 		"ground_truth": "../../Data/CytoPacq/GT Data/Frame Data/V2_T3/cytopacq_v2_t3.csv",
 		

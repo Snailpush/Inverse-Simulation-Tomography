@@ -10,7 +10,7 @@ from Components import utils
 #from Components import wavefield_processing
 from Components import quaternion
 #from Components.quaternion import Quaternion
-from Components.regularizer import Position_L2_Regularizer, Rotation_Kalman_Regularizer, None_Regularizer
+from Components.regularizer import Position_Kalman_Regularizer, Rotation_Kalman_Regularizer, None_Regularizer
 from Components.optimizer import Pose_Optimizer, Scheduler
 from Components.wavefield_processing import Transforms
 from Components.losses import MSE_NCC_Loss, MSE_Loss
@@ -124,8 +124,9 @@ class PoseOpt:
 
         # Regularizers - Sequential Frames regularize Pose w.r.t. previous best pose
         seq_regularizers = pose_opt_config["PoseOpt"]["Sequential"]["regularizers"]
-        self.seq_pos_reg = Position_L2_Regularizer(seq_regularizers["Position"])
-        self.seq_quat_reg = Rotation_Kalman_Regularizer(seq_regularizers["Quaternion"], dtype=dtype, device=device, normalize=True)
+        #self.seq_pos_reg = Position_L2_Regularizer(seq_regularizers["Position"])
+        self.seq_pos_reg = Position_Kalman_Regularizer(seq_regularizers["Position"], init_position, dtype=dtype, device=device)
+        self.seq_quat_reg = Rotation_Kalman_Regularizer(seq_regularizers["Quaternion"], init_quaternion, dtype=dtype, device=device)
         
 
         
@@ -273,7 +274,7 @@ class PoseOpt:
                     self.update_best_setting(epoch, loss, amp, phase, RI_distribution)
                     # Print Current Epoch (Loss + Pose)
                     reporting.print_epoch_update(epoch, loss, loss_components, self.pose,
-                                    print_update=20, indent=2, verbose=True)        
+                                    print_update=10, indent=2, verbose=True)        
                     # Log Current Epoch
                     self.logger.log_progress(epoch, loss, loss_components, self.pose)
                     # Log/Plot Visualizations

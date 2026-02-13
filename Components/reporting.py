@@ -394,16 +394,16 @@ class PoseOptLogger():
             - visualizations: Best Amplitude/Phase/Slice/Render
     Optional Logs:
         Option: "losses"
-            - Per Epoch: saves Total/Data/Reg Loss and individual loss components per epoch in a csv file
-            - Per Epoch: Plots Total/Data/Reg Loss and individual loss components over epochs every few epochs
+            - Per Frame: saves Total/Data/Reg Loss and individual loss components per epoch in a csv file
+            - Per Frame: Plots Total/Data/Reg Loss and individual loss components over epochs every few epochs
             - Summary: Plots Total/Data/Reg Loss and individual loss components of best settings over all frames
             - Summary: Plots Epoch of best setting over all frames
         Option: "amps":
-            - Per Epoch: saves amplitude image of current setting every few epochs
+            - Per Frame: saves amplitude image of current setting every few epochs
         Option: "phases":
-            - Per Epoch: saves phase image of current setting every few epochs
+            - Per Frame: saves phase image of current setting every few epochs
         Option: "poses":
-            - Per Epoch: saves position and quaternion of current setting every few epochs in a csv file
+            - Per Frame: saves position and quaternion of current setting every few epochs in a csv file
         
         """
     def __init__(self, logger_dict, unwrap):
@@ -933,8 +933,7 @@ class ReconOptLogger:
                 - Videos: Amplitude/Phase of optimized voxel onject with reconstruction poses
                 - Images: Extended Plots of Combination of Reconstruction Poses and Amplitude/Phase Comparison (see 'terse' option to disable)
                 - Videos: Extended Plots of Combination of Reconstruction Poses and Amplitude/Phase Comparison (see 'terse' option to disable)
-            Per Epoch Logs:
-                - visualizations: Amplitude/Phase/Slice/Render of current setting every few epochs
+
     Optional Logs:
         Option: "slices"
             - Per Epoch: Slice of voxel object for current epoch

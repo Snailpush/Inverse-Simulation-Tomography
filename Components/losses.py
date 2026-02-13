@@ -42,14 +42,18 @@ class MSE_Loss(torch.nn.Module):
     
 
 class MSE_NCC_Loss(torch.nn.Module):
+    """MSE + NCC Loss of Amplitude and Phase
+    MSE: Mean Squared Error
+    NCC: Normalized Cross Covariance (1 - NCC is the loss)
+    """
     def __init__(self, weights):
         super().__init__()
         self.name = "MSE + NCC Loss"
         self.weights = weights
         pass
 
-    def ncc(self, x, y, eps=1e-8):
-        """Normalized Cross Correlation"""
+    def ncc_(self, x, y, eps=1e-8):
+        """Normalized Cross-Covarince"""
         x_centered = x - torch.mean(x)
         y_centered = y - torch.mean(y)
 
@@ -61,6 +65,23 @@ class MSE_NCC_Loss(torch.nn.Module):
         denominator = x_variance * y_variance
         
         ncc = numerator / denominator
+        return ncc
+    
+    def ncc(self, x, y, eps=1e-8):
+        """Normalized Cross Correlation
+        For 2D images, this is equivalent to the convolution of one image with the complex conjugate of the other, normalized by their magnitudes.
+        Note: For real images of the same size, this reduces to: sum(x * y) / (||x|| * ||y||)"""
+        
+        # Correlation
+        #correlation = F.conv2d(x.unsqueeze(0).unsqueeze(0), y.unsqueeze(0).unsqueeze(0), padding='valid')
+        correlation = torch.sum(x * y)
+        
+        # Magnitude
+        x_norm = torch.sqrt(torch.sum(x * x))
+        y_norm = torch.sqrt(torch.sum(y * y))
+        
+        # Normalized Cross Correlation
+        ncc = correlation / (x_norm * y_norm + eps)
         return ncc
 
     def forward(self, gt_amp, gt_phase, amp, phase):

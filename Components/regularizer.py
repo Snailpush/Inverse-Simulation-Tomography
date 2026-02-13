@@ -18,60 +18,142 @@ class None_Regularizer():
         return ret
 
 
-class Position_L2_Regularizer():
-    def __init__(self, params, dtype=torch.float32, device=None):
+# class Position_L2_Regularizer():
+#     def __init__(self, params, dtype=torch.float32, device=None):
+#         if device is None:
+#             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#         self.device = device
+#         self.dtype = dtype
+
+#         self.lambda_ = params["lambda"]
+
+#     def update(self, target):
+#         self.target = target.detach().clone().to(self.device, dtype=self.dtype)
+
+#     def __call__(self, position):
+#         """
+#         Compute Regularization Loss.
+#         Computes L2 loss between current position and target position.
+#         ---
+#         position: tensor of shape [3,]
+#         """
+
+#         if self.target is None:
+#             raise RuntimeError(f"[Position L2 Regularizer] Target is not set. Call `update()` before computing regularization.")
+        
+#         target = self.target.to(position.device, dtype=position.dtype)
+#         reg_term = self.lambda_ * torch.sum((target - position)**2)
+#         return reg_term
+    
+#     def __repr__(self):
+#         ret = f" Position L2 Regularizer\n"
+#         ret += f"  Lambda: {self.lambda_}, \n"
+#         return ret
+    
+
+
+
+
+
+
+class Position_Kalman_Regularizer():
+    """ Regularizer that uses a Kalman Filter to smooth position estimates over time."""
+
+    def __init__(self, params, init_state, dtype=torch.float32, device=None):
+
         if device is None:
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.device = device
         self.dtype = dtype
 
-        self.lambda_ = params["lambda"]
 
-    def update(self, target):
-        self.target = target.detach().clone().to(self.device, dtype=self.dtype)
+        # Regularization weight
+        self.lambda_ = params["lambda"] 
+
+        # Initialize Kalman Filter parameters       
+        init_x = init_state.detach().clone().to(self.device, dtype=self.dtype)  # Initial state
+        init_P = torch.eye(3, dtype=self.dtype, device=self.device)             # Initial covariance
+        A = torch.eye(3, dtype=self.dtype, device=self.device)                  # State transition model
+        H = torch.eye(3, dtype=self.dtype, device=self.device)                  # Observation model
+
+        self.w = params.get("w", [0.1,0.1,0.1]) # Process noise covariance (can be scalar or list for diagonal)
+        self.v = params.get("v", [0.1,0.1,0.1]) # Observation noise covariance (can be scalar or list for diagonal)
+
+        # If w or v are given as scalars, convert to lists for diagonal covariance matrices
+        if isinstance(self.w, (int, float)):
+            self.w = [self.w, self.w, self.w]
+        if isinstance(self.v, (int, float)): 
+            self.v = [self.v, self.v, self.v]
+
+        Q = torch.diag(torch.tensor(self.w, dtype=self.dtype, device=self.device))  # Process noise covariance
+        R = torch.diag(torch.tensor(self.v, dtype=self.dtype, device=self.device))  # Observation noise covariance
+
+        self.kalman_filter = KalmanFilter(init_x, init_P, A, Q, H, R)
+
+    def update(self, position):
+        """"
+        Update Kalman Filter with current variable value.
+        """
+        # Ensure it does not copy the gradients
+        val = position.detach().clone().to(self.device, dtype=self.dtype)
+
+        # First Update since we do not update at the end of the previous frame
+        # Update with current measurement
+        self.kalman_filter.update(val)
+
+        # Predict next state
+        self.kalman_filter.predict()
 
     def __call__(self, position):
         """
         Compute Regularization Loss.
-        Computes L2 loss between current position and target position.
+        Computes L2 loss between current variable value and Kalman Filter estimate.
         ---
-        position: tensor of shape [3,]
-        """
+        position: tensor of shape [3,]"""
 
-        if self.target is None:
-            raise RuntimeError(f"[Position L2 Regularizer] Target is not set. Call `update()` before computing regularization.")
-        
-        target = self.target.to(position.device, dtype=position.dtype)
-        reg_term = self.lambda_ * torch.sum((target - position)**2)
+        # Value for regularization
+        val = position
+
+        # Get Kalman Filter estimate
+        with torch.no_grad():
+            kf_estimate = self.kalman_filter.estimate(val)
+
+        reg_term = self.lambda_ * torch.sum((kf_estimate - val)**2)
         return reg_term
     
     def __repr__(self):
-        ret = f" Position L2 Regularizer\n"
+        ret = f" Position Kallman Regularizer\n"
         ret += f"  Lambda: {self.lambda_}, \n"
+        ret += f"  Process Noise (w): {self.w}, \n"
+        ret += f"  Observation Noise (v): {self.v}, \n"
         return ret
     
 
 class Rotation_Kalman_Regularizer():
-
-    def __init__(self, params, dtype=torch.float32, device=None, normalize=True):
+    """ Regularizer that uses a Kalman Filter to smooth rotation estimates over time."""
+    
+    def __init__(self, params, init_state, dtype=torch.float32, device=None):
 
         if device is None:
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.device = device
         self.dtype = dtype
 
+
+        # Regularization weight
         self.lambda_ = params["lambda"] 
 
 
         # Initialize Kalman Filter parameters
-        init_x = torch.tensor([1,0,0,0], dtype=self.dtype, device=self.device)         # Initial state
+        init_x = init_state.detach().clone().to(self.device, dtype=self.dtype)  # Initial state
         init_P = torch.eye(4, dtype=self.dtype, device=self.device) * 0.1       # Initial covariance
         A = torch.eye(4, dtype=self.dtype, device=self.device)                  # State transition model
         H = torch.eye(4, dtype=self.dtype, device=self.device)                  # Observation model
         
-        self.w = params.get("w", [0.1,0.1,0.1,0.1])
-        self.v = params.get("v", [0.1,0.1,0.1,0.1])
+        self.w = params.get("w", [0.1,0.1,0.1,0.1]) # Process noise covariance (can be scalar or list for diagonal)
+        self.v = params.get("v", [0.1,0.1,0.1,0.1]) # Observation noise covariance (can be scalar or list for diagonal)
 
+        # If w or v are given as scalars, convert to lists for diagonal covariance matrices
         if isinstance(self.w, (int, float)):
             self.w = [self.w, self.w, self.w, self.w]
         if isinstance(self.v, (int, float)): 
@@ -80,12 +162,11 @@ class Rotation_Kalman_Regularizer():
         Q = torch.diag(torch.tensor(self.w, dtype=self.dtype, device=self.device))  # Process noise covariance
         R = torch.diag(torch.tensor(self.v, dtype=self.dtype, device=self.device))  # Observation noise covariance
 
-        self.kalman_filter = KalmanFilter(init_x, init_P, A, Q, H, R, normalize=normalize)
+        self.kalman_filter = KalmanFilter(init_x, init_P, A, Q, H, R)
     
     def update(self, q):
         """"
-        Update Kalman Filter with current variable value
-        ---
+        Update Kalman Filter with current variable value.
         """
         # Ensure it does not copy the gradients
         val = q.detach().clone().to(self.device, dtype=self.dtype)
@@ -93,9 +174,11 @@ class Rotation_Kalman_Regularizer():
         # First Update since we do not update at the end of the previous frame
         # Update with current measurement
         self.kalman_filter.update(val)
+        self.kalman_filter.x = self.kalman_filter.x / torch.linalg.norm(self.kalman_filter.x)  # Ensure unit quaternion
 
         # Predict next state
         self.kalman_filter.predict()
+        self.kalman_filter.x = self.kalman_filter.x / torch.linalg.norm(self.kalman_filter.x)  # Ensure unit quaternion
 
     def __call__(self, q):
         """
@@ -110,6 +193,7 @@ class Rotation_Kalman_Regularizer():
         # Get Kalman Filter estimate
         with torch.no_grad():
             kf_estimate = self.kalman_filter.estimate(val)
+            kf_estimate = kf_estimate / torch.linalg.norm(kf_estimate)  # Ensure unit quaternion
 
         reg_term = self.lambda_ * torch.sum((kf_estimate - val)**2)
         return reg_term
@@ -129,7 +213,7 @@ class Rotation_Kalman_Regularizer():
 
 class KalmanFilter:
     
-    def __init__(self, init_x, init_P, A, Q, H, R, normalize=False):
+    def __init__(self, init_x, init_P, A, Q, H, R):
         
         self.x = init_x  # State estimate
         self.P = init_P  # Estimate covariance
@@ -140,24 +224,19 @@ class KalmanFilter:
 
         self.K = self.compute_kalman_gain()     # Kalman Gain
 
-        self.normalize = normalize    # Whether the state is normalized (e.g., unit vector)
 
 
     def update(self, z):
         """Update the state estimate with a new measurement z.
         This is equivalent to the estimation + update step in Kalman Filtering for step k-1."""
-        self.x = self.x + self.K @ (z - self.H @ self.x)
-        if self.normalize:
-            self.x = self.x / torch.linalg.norm(self.x)
-        self.P = self.P - self.K @ self.H @ self.P
+        self.x = self.x + self.K @ (z - self.H @ self.x)    # Prediction for current measurement
+        self.P = self.P - self.K @ self.H @ self.P          # New Estimate Covariance
 
     def predict(self):
         """Predict the next state and update the estimate covariance.
         This is equivalent to the prediction step in Kalman Filtering for step k."""
         # Predict the next state
         self.x = self.A @ self.x
-        if self.normalize:
-            self.x = self.x / torch.linalg.norm(self.x)
         self.P = self.A @ self.P @ self.A.T + self.Q
 
         # Compute Kalman Gain for the predicted state
@@ -174,8 +253,6 @@ class KalmanFilter:
         """ Estimate the state given a measurement z without updating the state """
         z = z.to(self.x.device, dtype=self.x.dtype)
         x = self.x + self.K @ (z - self.H @ self.x)
-        if self.normalize:
-            x = x / torch.linalg.norm(x)
         return x
 
 
